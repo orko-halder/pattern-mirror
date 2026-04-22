@@ -37,6 +37,8 @@ Your job is to identify recurring unconscious patterns from a person's answers t
 
 ## How to read the answers
 
+The person's answers are provided in a <reflection_session> block. Each <answer> tag contains their response to one question, identified by its Q number.
+
 Read the 7 answers as a set, not individually. Look for:
 - The same belief or fear surfacing across multiple questions under different framings
 - Linguistic markers: deletions ("it just didn't work out"), distortions ("they always do this"), generalisations ("I never...")
@@ -64,7 +66,15 @@ One actionable micro-sequence they can use the next time this pattern activates.
 
 ## Tone
 
-Precise. Direct. Warm but not soft. You are not confirming their self-image — you are reflecting what their answers actually reveal. If the answers are vague or defended, name that directly."""
+Precise. Direct. Warm but not soft. You are not confirming their self-image — you are reflecting what their answers actually reveal. If the answers are vague or defended, name that directly.
+
+Do not hedge with phrases like "this might suggest" or "it's possible that" — state observations directly.
+
+Do not offer generic advice, therapeutic referrals, or motivational language in any section.
+
+If answers are sparse or vague, name the defensiveness explicitly rather than filling gaps with assumptions.
+
+Do not summarise what the person said — analyse what it reveals."""
 
 
 def collect_answers() -> list[dict]:
@@ -90,12 +100,77 @@ def collect_answers() -> list[dict]:
     return messages
 
 
+def validate_answers(client: Anthropic, answers: list[dict]) -> bool:
+    """Use Claude to check answer quality before analysis.
+
+    Two checks:
+    1. DISTINCTNESS — are answers genuinely different from each other?
+    2. RELEVANCE — is each answer actually responding to its question?
+    """
+
+    # Build paired question + answer block so Claude can check relevance
+    paired = "<validation_input>\n"
+    for i, (question, answer) in enumerate(zip(QUESTIONS, answers), 1):
+        paired += f"  <pair id=\"Q{i}\">\n"
+        paired += f"    <question>{question}</question>\n"
+        paired += f"    <answer>{answer['answer']}</answer>\n"
+        paired += f"  </pair>\n"
+    paired += "</validation_input>"
+
+    response = client.messages.create(
+        model="claude-sonnet-4-5",
+        max_tokens=150,
+        system=(
+            "You are an input quality checker for a psychological reflection tool. "
+            "You have two jobs:\n\n"
+            "1. DISTINCTNESS: Are the answers genuinely distinct responses to different questions, "
+            "or is the person repeating variations of the same answer across all questions?\n\n"
+            "2. RELEVANCE: Is each answer actually responding to its question, "
+            "or is the person writing something unrelated or random?\n\n"
+            "Reply in this exact format:\n"
+            "DISTINCTNESS: VALID or INVALID — one short reason\n"
+            "RELEVANCE: VALID or INVALID — one short reason\n\n"
+            "Be strict. An answer that ignores its question entirely is INVALID for relevance. "
+            "Answers that all address the same topic are INVALID for distinctness."
+        ),
+        messages=[
+            {"role": "user", "content": paired}
+        ],
+    )
+
+    result = response.content[0].text.strip()
+    lines = {line.split(":")[0].strip(): line for line in result.splitlines() if ":" in line}
+
+    failed = False
+
+    distinctness_line = lines.get("DISTINCTNESS", "")
+    if "INVALID" in distinctness_line:
+        reason = distinctness_line.split("INVALID", 1)[1].strip(" —-")
+        print(f"\n⚠️  Answers too similar: {reason}")
+        print("Please run again and answer each question from a different angle.")
+        failed = True
+
+    relevance_line = lines.get("RELEVANCE", "")
+    if "INVALID" in relevance_line:
+        reason = relevance_line.split("INVALID", 1)[1].strip(" —-")
+        print(f"\n⚠️  Answers off-topic: {reason}")
+        print("Please run again and answer each question directly.")
+        failed = True
+
+    if failed:
+        print()
+        return False
+
+    return True
+
+
 def format_answers(answers: list[dict]) -> str:
-    """Format answers into a clean block for the prompt."""
-    formatted = "Here are the person's answers to the 7 reflection questions:\n\n"
+    """Format answers into XML-tagged block for the prompt."""
+    formatted = "<reflection_session>\n"
     for item in answers:
-        formatted += f"{item['question']}: {item['answer']}\n\n"
-    return formatted.strip()
+        formatted += f"  <answer id=\"{item['question']}\">{item['answer']}</answer>\n"
+    formatted += "</reflection_session>"
+    return formatted
 
 
 def analyse(client: Anthropic, answers: list[dict]) -> None:
@@ -130,6 +205,11 @@ def main() -> None:
 
     client = Anthropic(api_key=api_key)
     answers = collect_answers()
+
+    print("\nChecking input quality...")
+    if not validate_answers(client, answers):
+        raise SystemExit(1)
+
     analyse(client, answers)
 
 
