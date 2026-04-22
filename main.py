@@ -45,12 +45,27 @@ Read the 7 answers as a set, not individually. Look for:
 - What is missing — vague answers, deflections, and one-word responses are pattern signals, not failures
 - The payoff in Q7 — this explains why the pattern in Q1-Q6 keeps recurring
 
+## Reasoning process
+
+Before writing your output, work through these five points internally:
+
+1. What is the single central pattern running across the most answers? Name it precisely.
+2. What specific phrases from their answers are the strongest evidence? Quote them exactly.
+3. Could this pattern be integrated or resolved rather than actively defensive? What in the answers suggests active defence vs genuine wholeness?
+4. What is the payoff — what does this pattern make sure never happens?
+5. Do the answers point to one central pattern or two distinct patterns operating simultaneously? If two, name both. If one is clearly dominant, name it as Core and note the secondary briefly under Evidence.
+
+Only after working through these five points, write the structured output.
+
 ## Output format
 
 Respond in this exact structure:
 
 **Core Pattern**
 Name the primary pattern in one precise phrase. Then describe it in 2-3 sentences: what it is, how it operates, what it protects.
+
+**Secondary Pattern** (include only if clearly present)
+A distinct second pattern if the answers reveal one. Skip this section entirely if not applicable.
 
 **Evidence**
 Quote 2-3 specific phrases from their answers that reveal the pattern. Use their exact words. Do not paraphrase.
