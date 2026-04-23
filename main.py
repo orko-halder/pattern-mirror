@@ -62,7 +62,7 @@ Only after working through these five points, write the structured output.
 Respond in this exact structure:
 
 **Core Pattern**
-Name the primary pattern in one precise phrase. Then describe it in 2-3 sentences: what it is, how it operates, what it protects.
+Name the pattern in plain language — short, memorable, something the person can recall in the moment it activates. Avoid clinical labels. Save precision for the description that follows. Then describe it in 2-3 sentences: what it is, how it operates, what it protects.
 
 **Secondary Pattern** (include only if clearly present)
 A distinct second pattern if the answers reveal one. Skip this section entirely if not applicable.
@@ -77,7 +77,7 @@ Based on their answers, name 2-3 domains where this pattern operates (work, rela
 What does this pattern make sure never happens? What is it protecting them from?
 
 **The Protocol**
-One actionable micro-sequence they can use the next time this pattern activates. Concrete. Specific. Deployable tomorrow morning. Not advice — a sequence of steps.
+One actionable micro-sequence they can use the next time this pattern activates. Concrete. Specific. Deployable tomorrow morning. Not advice — a sequence of steps. End with one failure condition: what should the person do if the feared outcome actually occurs when they try the protocol?
 
 ## Tone
 
@@ -119,8 +119,11 @@ def validate_answers(client: Anthropic, answers: list[dict]) -> bool:
     """Use Claude to check answer quality before analysis.
 
     Two checks:
-    1. DISTINCTNESS — are answers genuinely different from each other?
-    2. RELEVANCE — is each answer actually responding to its question?
+    1. RELEVANCE — is each answer actually responding to its question?
+    2. EFFORT — is the person genuinely engaging, or giving empty non-answers?
+
+    Note: recurring themes across answers are expected and valid — that's the pattern.
+    Do NOT flag answers for being thematically similar.
     """
 
     # Build paired question + answer block so Claude can check relevance
@@ -133,20 +136,20 @@ def validate_answers(client: Anthropic, answers: list[dict]) -> bool:
     paired += "</validation_input>"
 
     response = client.messages.create(
-        model="claude-sonnet-4-5",
+        model="claude-haiku-4-5-20251001",
         max_tokens=150,
         system=(
             "You are an input quality checker for a psychological reflection tool. "
             "You have two jobs:\n\n"
-            "1. DISTINCTNESS: Are the answers genuinely distinct responses to different questions, "
-            "or is the person repeating variations of the same answer across all questions?\n\n"
-            "2. RELEVANCE: Is each answer actually responding to its question, "
-            "or is the person writing something unrelated or random?\n\n"
+            "1. RELEVANCE: Is each answer actually responding to its question? "
+            "It is normal and expected for answers to share themes — the same pattern often surfaces across multiple questions. "
+            "Only flag INVALID if an answer is clearly unrelated or random.\n\n"
+            "2. EFFORT: Is the person genuinely engaging with the questions? "
+            "Flag INVALID only if most answers are single words, completely empty, or obvious nonsense.\n\n"
             "Reply in this exact format:\n"
-            "DISTINCTNESS: VALID or INVALID — one short reason\n"
-            "RELEVANCE: VALID or INVALID — one short reason\n\n"
-            "Be strict. An answer that ignores its question entirely is INVALID for relevance. "
-            "Answers that all address the same topic are INVALID for distinctness."
+            "RELEVANCE: VALID or INVALID — one short reason\n"
+            "EFFORT: VALID or INVALID — one short reason\n\n"
+            "Be lenient on themes and strict only on relevance and effort."
         ),
         messages=[
             {"role": "user", "content": paired}
@@ -158,18 +161,18 @@ def validate_answers(client: Anthropic, answers: list[dict]) -> bool:
 
     failed = False
 
-    distinctness_line = lines.get("DISTINCTNESS", "")
-    if "INVALID" in distinctness_line:
-        reason = distinctness_line.split("INVALID", 1)[1].strip(" —-")
-        print(f"\n⚠️  Answers too similar: {reason}")
-        print("Please run again and answer each question from a different angle.")
-        failed = True
-
     relevance_line = lines.get("RELEVANCE", "")
     if "INVALID" in relevance_line:
         reason = relevance_line.split("INVALID", 1)[1].strip(" —-")
         print(f"\n⚠️  Answers off-topic: {reason}")
         print("Please run again and answer each question directly.")
+        failed = True
+
+    effort_line = lines.get("EFFORT", "")
+    if "INVALID" in effort_line:
+        reason = effort_line.split("INVALID", 1)[1].strip(" —-")
+        print(f"\n⚠️  Answers too brief: {reason}")
+        print("Please run again and engage genuinely with each question.")
         failed = True
 
     if failed:
@@ -188,13 +191,14 @@ def format_answers(answers: list[dict]) -> str:
     return formatted
 
 
-def analyse(client: Anthropic, answers: list[dict]) -> None:
-    """Send answers to Claude and stream the pattern analysis."""
+def analyse(client: Anthropic, answers: list[dict]) -> str:
+    """Send answers to Claude and stream the pattern analysis. Returns full output."""
     print("\n" + "=" * 60)
     print("PATTERN ANALYSIS")
     print("=" * 60 + "\n")
 
     user_content = format_answers(answers)
+    full_output = []
 
     with client.messages.stream(
         model="claude-sonnet-4-5",
@@ -206,8 +210,44 @@ def analyse(client: Anthropic, answers: list[dict]) -> None:
     ) as stream:
         for text in stream.text_stream:
             print(text, end="", flush=True)
+            full_output.append(text)
 
     print("\n")
+    return "".join(full_output)
+
+
+def evaluate_output(client: Anthropic, analysis_output: str) -> None:
+    """Use Claude to grade the analysis output on three quality dimensions."""
+    response = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=400,
+        system=(
+            "You are a quality evaluator for a human psychological pattern analysis tool. "
+            "Score the analysis on two dimensions, each from 1 to 10.\n\n"
+            "PATTERN ACCURACY (1-10): Did it identify a specific, precise pattern — or a vague generalisation?\n"
+            "1 = generic and could apply to anyone. 10 = precise, specific, clearly grounded in the answers.\n\n"
+            "PROTOCOL DEPLOYABILITY (1-10): Is the protocol concrete enough to use tomorrow morning?\n"
+            "1 = generic advice. 10 = specific steps deployable in a real moment of pattern activation.\n\n"
+            "Reply in this exact format:\n"
+            "PATTERN ACCURACY: X/10 — one short reason\n"
+            "PROTOCOL DEPLOYABILITY: X/10 — one short reason\n"
+            "OVERALL: X/20\n"
+            "STRENGTHS: one sentence — what the analysis does well\n"
+            "WEAKNESSES: one sentence — what the analysis could improve\n"
+            "REASONING: one sentence — why you gave the scores you did, based on the content of the analysis output\n"
+            "---"
+        ),
+        stop_sequences=["---"],
+        messages=[
+            {"role": "user", "content": analysis_output}
+        ],
+    )
+
+    print("\n" + "=" * 60)
+    print("QUALITY EVALUATION")
+    print("=" * 60 + "\n")
+    print(response.content[0].text.strip())
+    print()
 
 
 def main() -> None:
@@ -225,7 +265,8 @@ def main() -> None:
     if not validate_answers(client, answers):
         raise SystemExit(1)
 
-    analyse(client, answers)
+    analysis_output = analyse(client, answers)
+    evaluate_output(client, analysis_output)
 
 
 if __name__ == "__main__":
