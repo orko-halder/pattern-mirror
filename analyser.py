@@ -64,7 +64,12 @@ def format_structured_output(data: dict) -> str:
     lines.append(f"Detection: {protocol.get('detection_trigger', '')}")
     for i, step in enumerate(protocol.get("steps", []), 1):
         lines.append(f"  {i}. {step}")
-    lines.append(f"Failure condition: {protocol.get('failure_condition', '')}")
+    fc = protocol.get("failure_condition", {})
+    if isinstance(fc, dict):
+        lines.append(f"If it goes wrong: {fc.get('if_wrong', '')}")
+        lines.append(f"If it goes right: {fc.get('if_right', '')}")
+    else:
+        lines.append(f"Failure condition: {fc}")
 
     return "\n".join(lines)
 

@@ -70,7 +70,7 @@ Based on their answers, name 2-3 domains where this pattern operates (work, rela
 What does this pattern make sure never happens? What is it protecting them from?
 
 **The Protocol**
-One actionable micro-sequence they can use the next time this pattern activates. Concrete. Specific. Deployable tomorrow morning. Not advice — a sequence of steps. Begin with one detection trigger — a specific physical or situational signal that fires before the override behaviour starts (e.g., "when you feel the urge to reopen something you've already finished"). Then the steps. If the pattern involves urgency, anxiety, or emotional avoidance, account for the possibility that pausing escalates rather than clarifies — include a step for that moment. End with one failure condition: if the feared outcome actually occurs, name the pattern-confirming interpretation the person will be tempted to make, and reframe it explicitly. The failure condition must not be completable by someone still inside the pattern.
+One actionable micro-sequence they can use the next time this pattern activates. Concrete. Specific. Deployable tomorrow morning. Not advice — a sequence of steps. Begin with one detection trigger — a specific physical or situational signal that fires before the override behaviour starts (e.g., "when you feel the urge to reopen something you've already finished"). Then the steps. Include a minimum viable fallback for moments when the full protocol cannot be executed — when the person is mid-conversation, in a meeting, or emotionally flooded. This fallback should be a single action they can take in under 10 seconds. If any step involves sending a message or communicating with someone, specify the tone or provide a template — do not leave the content open, as the person may re-engage the pattern in how they write it. If the pattern involves urgency, anxiety, or emotional avoidance, account for the possibility that pausing escalates rather than clarifies — include a step for that moment. End with one failure condition that covers both scenarios: (1) if the feared outcome actually occurs — sequence matters: first give one physical or behavioural stabilisation action for the immediate moment (the person will not be able to reflect while flooded), then once regulated, name the pattern-confirming interpretation they will be tempted to make and reframe it explicitly; (2) if nothing goes wrong — name the attribution the pattern will make ("my vigilance worked") and provide a reframe that credits the person's capacity, not the armour. The failure condition must not be completable by someone still inside the pattern.
 
 ## Tone
 
@@ -145,8 +145,19 @@ ANALYSIS_TOOL = {
                         "description": "Concrete steps of the micro-sequence."
                     },
                     "failure_condition": {
-                        "type": "string",
-                        "description": "What to do if the feared outcome actually occurs when trying the protocol."
+                        "type": "object",
+                        "description": "Two-scenario response for after the protocol is attempted.",
+                        "properties": {
+                            "if_wrong": {
+                                "type": "string",
+                                "description": "If the feared outcome occurs: name the pattern-confirming interpretation, reframe it, and give one concrete physical/behavioural action for the next 10 minutes."
+                            },
+                            "if_right": {
+                                "type": "string",
+                                "description": "If nothing goes wrong: name the attribution the pattern will make (e.g. 'my vigilance worked'), and reframe it to credit the person's capacity, not the armour."
+                            }
+                        },
+                        "required": ["if_wrong", "if_right"]
                     }
                 },
                 "required": ["detection_trigger", "steps", "failure_condition"]
