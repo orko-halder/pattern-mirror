@@ -74,16 +74,16 @@ if run:
     if not valid:
         st.stop()
 
-    # Analysis
-    with st.spinner("Running analysis..."):
-        analysis_data, analysis_text = analyse_structured(client, answers)
-
     st.divider()
     st.subheader("Pattern Analysis")
+
+    with st.spinner("Running analysis..."):
+        analysis_data, analysis_text = analyse_structured(client, answers)
 
     # Core pattern
     core = analysis_data.get("core_pattern", {})
     st.markdown(f"### {core.get('name', '')}")
+    st.caption(core.get("plain_summary", ""))
     st.markdown(core.get("description", ""))
 
     # Secondary pattern
@@ -108,7 +108,7 @@ if run:
 
     # Payoff
     st.markdown("---")
-    st.markdown("**The Payoff**")
+    st.markdown("**What It's Protecting You From**")
     st.info(analysis_data.get("payoff", ""))
 
     # Protocol
@@ -128,12 +128,11 @@ if run:
     else:
         st.warning(f"**Failure condition:** {fc}")
 
-    # Evaluation
+    # Evaluation — runs in both modes
     st.divider()
     st.subheader("Quality Evaluation")
     with st.spinner("Evaluating output..."):
         with st.expander("See evaluation", expanded=False):
-            # Redirect evaluate_output print to st.text
             import io, contextlib
             buffer = io.StringIO()
             with contextlib.redirect_stdout(buffer):

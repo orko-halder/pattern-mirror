@@ -74,7 +74,7 @@ One actionable micro-sequence deployable tomorrow morning. Not advice — a conc
 
 Detection trigger: One specific physical or situational signal that fires before the override behaviour starts. Grounded in sensation or context, not thought.
 
-Steps: Concrete, sequenced actions. If any step involves sending a message or communicating with someone, specify the tone or provide a template — do not leave the content open, as the person may re-engage the pattern in how they write it. If the pattern involves urgency, anxiety, or emotional avoidance, account for the possibility that pausing escalates rather than clarifies.
+Steps: Concrete, sequenced actions. If any step involves saying something out loud or to oneself, provide a worked example of exactly what that sounds like — do not leave verbal steps open-ended, as they become inaccessible under stress. If any step involves sending a message or communicating with someone, specify the tone or provide a template. If the pattern involves urgency, anxiety, or emotional avoidance, account for the possibility that pausing escalates rather than clarifies.
 
 Fallback (mid-activation): A single action under 10 seconds for when the person is mid-conversation, in a meeting, or cannot run the full sequence.
 
@@ -112,12 +112,16 @@ ANALYSIS_TOOL = {
                         "type": "string",
                         "description": "Plain language name — short, memorable, recallable in the moment it activates."
                     },
+                    "plain_summary": {
+                        "type": "string",
+                        "description": "One sentence describing the lived experience in plain speech — no jargon, no clinical terms. Describes what the person actually does and feels, not the mechanism. E.g. 'You agree on the outside to avoid conflict, and carry the anger alone afterwards.'"
+                    },
                     "description": {
                         "type": "string",
                         "description": "2-3 sentences: what it is, how it operates, what it protects."
                     }
                 },
-                "required": ["name", "description"]
+                "required": ["name", "plain_summary", "description"]
             },
             "secondary_pattern": {
                 "type": ["object", "null"],
@@ -177,7 +181,7 @@ ANALYSIS_TOOL = {
                             },
                             "if_right": {
                                 "type": "string",
-                                "description": "If nothing goes wrong: name the attribution the pattern will claim, reframe it to credit the person's capacity, and name the internal resistance the pattern will offer to the reframe."
+                                "description": "If nothing goes wrong: name the attribution the pattern will claim, reframe it to credit the person's capacity, and provide one short body-based recovery phrase the person can use at the moment doubt fires — something physical and immediate, not analytical or cognitive."
                             }
                         },
                         "required": ["if_wrong", "if_right"]

@@ -1,0 +1,65 @@
+{
+  "jungian_shadow": {
+    "name": "Jungian Shadow",
+    "tradition": "Jungian / Analytical Psychology",
+    "description": "The shadow contains traits, impulses, and feelings the ego has rejected as incompatible with its self-image. What we cannot accept in ourselves we project onto others — seeing in them what we refuse to see in ourselves. The shadow is not inherently negative; it holds both destructive patterns and unlived potential.",
+    "pattern_tags": ["projection", "self-rejection", "anger", "envy", "idealization"],
+    "protocol_note": "Shadow work involves owning the projected quality — not as a flaw to fix, but as a disowned part to integrate."
+  },
+  "attachment_anxious": {
+    "name": "Anxious Attachment",
+    "tradition": "Attachment Theory",
+    "description": "Anxious attachment develops when caregiving was inconsistent — sometimes available, sometimes not. The person learns that connection is possible but unreliable, producing hypervigilance to relational signals, fear of abandonment, and a tendency to amplify bids for connection. Underneath is a core belief: 'I am not enough to be chosen consistently.'",
+    "pattern_tags": ["abandonment", "hypervigilance", "people-pleasing", "reassurance-seeking"],
+    "protocol_note": "The activation pattern is threat-detection in neutral relational events. The intervention point is before the bid for reassurance, not after rejection."
+  },
+  "attachment_avoidant": {
+    "name": "Avoidant Attachment",
+    "tradition": "Attachment Theory",
+    "description": "Avoidant attachment develops when emotional needs were consistently unmet or dismissed. The person learns that relying on others is unsafe and builds a self-sufficient identity as protection. Intimacy is approached with ambivalence — desired but threatening. The core belief: 'I am safer alone.'",
+    "pattern_tags": ["self-sufficiency", "emotional-avoidance", "distance", "independence", "isolation"],
+    "protocol_note": "The pattern activates at the moment of potential vulnerability — before asking for help, before disclosing difficulty. That is the intervention point."
+  },
+  "fawn_response": {
+    "name": "Fawn Response",
+    "tradition": "Trauma-Informed / Polyvagal",
+    "description": "The fawn response is a survival strategy in which the person appeases, agrees, and accommodates to avoid conflict or threat. It is a nervous system response, not a personality trait — the body learned that compliance reduces danger. Over time it becomes automatic, operating even in low-stakes situations where no real threat exists.",
+    "pattern_tags": ["people-pleasing", "conflict-avoidance", "self-erasure", "compliance", "resentment"],
+    "protocol_note": "The fawn response bypasses conscious choice — it fires before the person decides to agree. Detection must happen in the body, before the words come out."
+  },
+  "inner_critic": {
+    "name": "Inner Critic",
+    "tradition": "Internal Family Systems / Psychodynamic",
+    "description": "The inner critic is a protective part that attacks the self before the outside world can. Its logic: if I find my flaws first, I control the exposure. The criticism feels like truth but is actually a preemptive defence. The critic's harshness is proportional to the wound it is trying to protect.",
+    "pattern_tags": ["self-criticism", "perfectionism", "shame", "self-blame", "inadequacy"],
+    "protocol_note": "The critic speaks in absolutes — always, never, everyone can see. These linguistic markers are the detection trigger. The intervention is not to silence the critic but to ask what it is protecting."
+  },
+  "cognitive_distortion_catastrophising": {
+    "name": "Catastrophising",
+    "tradition": "Cognitive Behavioural Therapy",
+    "description": "Catastrophising is the pattern of assuming the worst possible outcome when faced with uncertainty. It functions as a control strategy — if I imagine the worst, I will not be caught off guard. The payoff is a sense of preparation; the cost is chronic anxiety and avoidance of situations where failure is possible.",
+    "pattern_tags": ["worst-case", "anxiety", "avoidance", "control", "uncertainty"],
+    "protocol_note": "The intervention is not positive thinking but probability testing — what is the realistic likelihood of this outcome, and what would actually happen if it occurred?"
+  },
+  "core_belief_unworthiness": {
+    "name": "Core Belief — Unworthiness",
+    "tradition": "Schema Therapy / CBT",
+    "description": "A core belief of unworthiness operates as a lens through which all experience is interpreted. Successes are dismissed as luck or deception; failures confirm the belief. The person structures their behaviour to avoid situations that might expose the unworthiness — which also prevents the disconfirming experiences that would challenge it.",
+    "pattern_tags": ["self-worth", "impostor", "dismissing-success", "shame", "exposure"],
+    "protocol_note": "The belief is maintained by selective attention — noticing confirming evidence, dismissing disconfirming evidence. The protocol must target the dismissal mechanism, not the belief directly."
+  },
+  "identity_foreclosure": {
+    "name": "Identity Foreclosure",
+    "tradition": "Developmental Psychology / Erikson",
+    "description": "Identity foreclosure occurs when a person adopts a fixed identity without exploration — often to meet external expectations or to resolve anxiety quickly. The foreclosed identity feels certain but brittle; it cannot accommodate new information about the self. 'I'm just not someone who...' is its linguistic signature.",
+    "pattern_tags": ["fixed-identity", "rigidity", "self-limiting", "role", "certainty"],
+    "protocol_note": "The foreclosed identity is defended because uncertainty feels more threatening than limitation. The protocol works not by challenging the identity but by introducing small, low-stakes exceptions to it."
+  },
+  "hypervigilance": {
+    "name": "Hypervigilance",
+    "tradition": "Trauma-Informed / Polyvagal",
+    "description": "Hypervigilance is a chronic state of threat-scanning in which the nervous system remains on alert even in safe environments. It developed as an accurate response to an unpredictable environment and became a default setting. The cost is exhaustion, difficulty being present, and interpreting neutral events as threatening.",
+    "pattern_tags": ["threat-scanning", "safety", "control", "exhaustion", "misreading-signals"],
+    "protocol_note": "Hypervigilance cannot be switched off by reasoning — it is a body state, not a thought. The intervention must be somatic before it can be cognitive."
+  }
+}
