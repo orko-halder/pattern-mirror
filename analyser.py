@@ -16,7 +16,7 @@ def analyse_structured(client: Anthropic, answers: list[dict]) -> tuple[dict, st
 
     response = client.messages.create(
         model="claude-sonnet-4-5",
-        max_tokens=1024,
+        max_tokens=2048,
         system=SYSTEM_PROMPT,
         tools=[ANALYSIS_TOOL],
         tool_choice={"type": "tool", "name": "pattern_analysis"},
@@ -64,6 +64,8 @@ def format_structured_output(data: dict) -> str:
     lines.append(f"Detection: {protocol.get('detection_trigger', '')}")
     for i, step in enumerate(protocol.get("steps", []), 1):
         lines.append(f"  {i}. {step}")
+    lines.append(f"If you can't stop right now: {protocol.get('fallback_mid_activation', '')}")
+    lines.append(f"If you're completely overwhelmed: {protocol.get('fallback_shutdown', '')}")
     fc = protocol.get("failure_condition", {})
     if isinstance(fc, dict):
         lines.append(f"If it goes wrong: {fc.get('if_wrong', '')}")
@@ -84,7 +86,7 @@ def analyse(client: Anthropic, answers: list[dict]) -> str:
 
     with client.messages.stream(
         model="claude-sonnet-4-5",
-        max_tokens=1024,
+        max_tokens=2048,
         system=SYSTEM_PROMPT,
         messages=[
             {"role": "user", "content": user_content}

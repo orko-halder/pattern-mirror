@@ -119,6 +119,8 @@ if run:
     st.markdown("**Steps:**")
     for i, step in enumerate(protocol.get("steps", []), 1):
         st.markdown(f"{i}. {step}")
+    st.markdown(f"⚡ **If you can't stop right now:** {protocol.get('fallback_mid_activation', '')}")
+    st.markdown(f"🛑 **If you're completely overwhelmed:** {protocol.get('fallback_shutdown', '')}")
     fc = protocol.get("failure_condition", {})
     if isinstance(fc, dict):
         st.warning(f"**If it goes wrong:** {fc.get('if_wrong', '')}")
