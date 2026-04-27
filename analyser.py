@@ -8,22 +8,23 @@ Two modes: structured JSON (default) and streaming text (kept for future toggle)
 from anthropic import Anthropic
 from prompts import SYSTEM_PROMPT, ANALYSIS_TOOL
 from validator import format_answers
-from tools import LOOKUP_FRAMEWORK_TOOL, handle_tool_call
+from tools import LOOKUP_FRAMEWORK_TOOL, WEB_SEARCH_TOOL, handle_tool_call
 
 
-def analyse_structured(client: Anthropic, answers: list[dict]) -> tuple[dict, str]:
+def analyse_structured(client: Anthropic, answers: list[dict]) -> tuple[dict, str, list[dict]]:
     """Send answers to Claude, get back structured JSON.
+    Returns (data_dict, formatted_string, citations).
 
     Tool use loop:
-    1. Claude may call lookup_framework before producing the final analysis
+    1. Claude may call lookup_framework or web_search before producing the final analysis
     2. We execute the tool and send the result back
     3. Claude continues until it calls pattern_analysis to return the structured output
     """
     user_content = format_answers(answers)
     messages = [{"role": "user", "content": user_content}]
-
-    # Both tools available: lookup_framework (Claude's choice) + pattern_analysis (forced at end)
-    tools = [LOOKUP_FRAMEWORK_TOOL, ANALYSIS_TOOL]
+    tools = [LOOKUP_FRAMEWORK_TOOL, WEB_SEARCH_TOOL, ANALYSIS_TOOL]
+    citations = []
+    force_final = False
 
     while True:
         response = client.messages.create(
@@ -31,63 +32,44 @@ def analyse_structured(client: Anthropic, answers: list[dict]) -> tuple[dict, st
             max_tokens=2048,
             system=SYSTEM_PROMPT,
             tools=tools,
+            tool_choice={"type": "tool", "name": "pattern_analysis"} if force_final else {"type": "auto"},
             messages=messages,
         )
 
-        # Check what Claude wants to do
         if response.stop_reason == "end_turn":
-            # Claude finished without calling pattern_analysis — shouldn't happen, but handle it
             break
 
-        # Collect all tool calls from this response
         tool_calls = [b for b in response.content if b.type == "tool_use"]
 
         if not tool_calls:
             break
 
-        # Check if Claude called pattern_analysis — that's the final structured output
+        # If Claude called pattern_analysis — we're done
         for block in tool_calls:
             if block.name == "pattern_analysis":
                 formatted = format_structured_output(block.input)
-                return block.input, formatted
+                return block.input, formatted, citations
 
-        # Claude called lookup_framework — execute it and send results back
-        print(f"\n🔧 Tool called: {[b.name for b in tool_calls]}")
-        # Add Claude's response to message history
+        # Claude called a lookup tool — execute it, collect citations, add to history
+        for b in tool_calls:
+            print(f"\n🔧 Tool called: {b.name} | input: {b.input}")
+
         messages.append({"role": "assistant", "content": response.content})
 
-        # Build tool results
         tool_results = []
         for block in tool_calls:
-            result = handle_tool_call(block.name, block.input)
+            envelope = handle_tool_call(block.name, block.input)
+            citations.extend(envelope["metadata"].get("citations", []))
             tool_results.append({
                 "type": "tool_result",
                 "tool_use_id": block.id,
-                "content": result
+                "content": envelope["content"]
             })
 
-        # Send results back to Claude
         messages.append({"role": "user", "content": tool_results})
+        force_final = True
 
-        # Now force Claude to produce the final structured output
-        # Add pattern_analysis as forced tool_choice for the next call
-        response = client.messages.create(
-            model="claude-sonnet-4-5",
-            max_tokens=2048,
-            system=SYSTEM_PROMPT,
-            tools=tools,
-            tool_choice={"type": "tool", "name": "pattern_analysis"},
-            messages=messages,
-        )
-
-        for block in response.content:
-            if block.type == "tool_use" and block.name == "pattern_analysis":
-                formatted = format_structured_output(block.input)
-                return block.input, formatted
-
-        break
-
-    return {}, ""
+    return {}, "", []
 
 
 def format_structured_output(data: dict) -> str:

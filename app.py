@@ -78,7 +78,7 @@ if run:
     st.subheader("Pattern Analysis")
 
     with st.spinner("Running analysis..."):
-        analysis_data, analysis_text = analyse_structured(client, answers)
+        analysis_data, analysis_text, citations = analyse_structured(client, answers)
 
     # Core pattern
     core = analysis_data.get("core_pattern", {})
@@ -127,6 +127,13 @@ if run:
         st.success(f"**If it goes right:** {fc.get('if_right', '')}")
     else:
         st.warning(f"**Failure condition:** {fc}")
+
+    # Citations — only shown when web search was used
+    if citations:
+        st.markdown("---")
+        st.markdown("**Further Reading**")
+        for c in citations:
+            st.markdown(f"- [{c['title']}]({c['url']})")
 
     # Evaluation — runs in both modes
     st.divider()
