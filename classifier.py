@@ -4,7 +4,15 @@ Pattern Mirror — readiness classifier.
 Reads the 6 answers and produces a delivery profile before the main analysis runs.
 The profile shapes how the pattern is delivered, not what is found.
 
-Currently: logs to terminal only. Delivery adaptation wired in Step 2.
+Active parameters (classified by Claude):
+  - self_awareness  : how much the person already sees their patterns
+  - fragility_risk  : risk that direct delivery triggers shame spiral or shutdown
+
+Derived parameter (computed in Python from active parameters):
+  - delivery_mode   : direct | paced | gentle — see derive_delivery_mode()
+
+Future parameters are tracked in the project backlog (Arka_CCA_Sprint_Tracker.md).
+To activate one: add to CLASSIFIER_TOOL schema, system prompt signals, derive_delivery_mode(), safe default, and log_profile().
 """
 
 from anthropic import Anthropic
@@ -37,16 +45,6 @@ CLASSIFIER_TOOL = {
                     "LOW: answers feel grounded, curious, or matter-of-fact about difficulty."
                 )
             },
-            "delivery_mode": {
-                "type": "string",
-                "enum": ["direct", "paced", "gentle"],
-                "description": (
-                    "Derived from self_awareness + fragility_risk. "
-                    "DIRECT: high awareness + low fragility — name the pattern clearly, trust them to hold it. "
-                    "PACED: medium awareness or medium fragility — acknowledge the cost before naming the pattern. "
-                    "GENTLE: low awareness or high fragility — frame what happened to them before what they're doing."
-                )
-            },
             "signal_notes": {
                 "type": "string",
                 "description": (
@@ -55,22 +53,38 @@ CLASSIFIER_TOOL = {
                 )
             }
         },
-        "required": ["self_awareness", "fragility_risk", "delivery_mode", "signal_notes"]
+        "required": ["self_awareness", "fragility_risk", "signal_notes"]
     }
 }
 
 
+def derive_delivery_mode(profile: dict) -> str:
+    """Deterministically derive delivery mode from the classified profile.
+
+    Fragility is the dominant signal — it determines the floor.
+    Self-awareness is the tiebreaker only when fragility is low.
+
+    Future parameters plug in here:
+      - resistance: HIGH resistance → anchor pattern in person's own words regardless of mode
+      - psychological_vocabulary: LOW vocabulary → plain language register regardless of mode
+    """
+    fragility = profile.get("fragility_risk", "medium")
+    awareness = profile.get("self_awareness", "medium")
+
+    if fragility == "high":
+        return "gentle"
+    if fragility == "medium":
+        return "paced"
+    # fragility is low — awareness decides
+    if awareness == "high":
+        return "direct"
+    return "paced"
+
+
 def classify_readiness(client: Anthropic, answers: list[dict]) -> dict:
-    """Assess the person's self-awareness level and fragility risk from their answers.
+    """Assess the person's readiness profile from their answers.
 
-    Returns a readiness profile dict:
-    {
-        "self_awareness": "low" | "medium" | "high",
-        "fragility_risk": "low" | "medium" | "high",
-        "delivery_mode": "direct" | "paced" | "gentle",
-        "signal_notes": str
-    }
-
+    Returns a profile dict with active parameters + derived delivery_mode.
     Returns a safe default on failure — never blocks the main pipeline.
     """
     user_content = format_answers(answers)
@@ -105,7 +119,12 @@ def classify_readiness(client: Anthropic, answers: list[dict]) -> dict:
 
         for block in response.content:
             if block.type == "tool_use" and block.name == "readiness_profile":
-                return block.input
+                if not block.input:
+                    print("⚠️  Classifier returned empty profile — using default.")
+                    break
+                profile = dict(block.input)
+                profile["delivery_mode"] = derive_delivery_mode(profile)
+                return profile
 
     except Exception as e:
         print(f"⚠️  Classifier failed ({type(e).__name__}) — using default profile.")

@@ -98,6 +98,66 @@ If answers are sparse or vague, name the defensiveness explicitly rather than fi
 
 Do not summarise what the person said — analyse what it reveals."""
 
+
+# ── Delivery mode instructions ────────────────────────────────
+# Appended to SYSTEM_PROMPT based on the readiness classifier output.
+# The analysis (what you find) never changes — only the delivery (how you present it).
+
+_PROTOCOL_SCOPE_NOTE = """
+SCOPE: The delivery mode applies to core_pattern, secondary_pattern, evidence, and payoff \
+only. The protocol section is out of scope — it must remain fully concrete regardless of \
+delivery mode. Abstract or cushioned language in protocol steps is a failure, not a kindness. \
+Someone in high fragility has less cognitive bandwidth when the pattern activates, not more. \
+The protocol must be deployable under stress by anyone.\
+"""
+
+_DELIVERY_DIRECT = """
+## Delivery mode: DIRECT
+
+The person has high self-awareness and low fragility risk. They can hold precision.
+
+- Name the pattern clearly and early. Do not soften the opening.
+- State observations directly — no hedging, no preamble.
+- The protocol can be demanding. Assume they have the capacity to follow it.
+- Do not lead with validation. They are not here for reassurance.
+""" + _PROTOCOL_SCOPE_NOTE
+
+_DELIVERY_PACED = """
+## Delivery mode: PACED
+
+The person has partial self-awareness or moderate fragility. Sequence matters.
+
+- Acknowledge the cost of carrying this pattern before naming what it is.
+- Lead with the payoff (what it protects) before the diagnosis (what it costs).
+- Name the intelligence of the defence before challenging it — this pattern exists for a reason.
+- The protocol should be clear but not demanding. One step at a time.
+""" + _PROTOCOL_SCOPE_NOTE
+
+_DELIVERY_GENTLE = """
+## Delivery mode: GENTLE
+
+The person shows high fragility risk or low self-awareness. Shame is already present.
+
+- Frame what happened to them before framing what they are doing.
+- Do not open with the diagnosis. Open with the payoff — what this pattern has been protecting.
+- Use "this pattern tends to" framing rather than "you do this" in the early sections.
+- Reduce shame load: name the pattern as something that developed for understandable reasons, not a character flaw.
+- The protocol must be simple. Two steps maximum before the fallback. Prioritise the fallback over the full sequence.
+- Do not name the pattern's cost until after you have named its function.
+""" + _PROTOCOL_SCOPE_NOTE
+
+_DELIVERY_MAP = {
+    "direct": _DELIVERY_DIRECT,
+    "paced":  _DELIVERY_PACED,
+    "gentle": _DELIVERY_GENTLE,
+}
+
+
+def build_system_prompt(delivery_mode: str) -> str:
+    """Return the system prompt with the appropriate delivery instructions appended."""
+    delivery = _DELIVERY_MAP.get(delivery_mode, _DELIVERY_PACED)
+    return SYSTEM_PROMPT + delivery
+
 ANALYSIS_TOOL = {
     "name": "pattern_analysis",
     "description": "Return the structured pattern analysis for the reflection session.",
