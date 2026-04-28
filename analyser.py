@@ -12,6 +12,7 @@ from anthropic import Anthropic
 from prompts import SYSTEM_PROMPT, ANALYSIS_TOOL
 from validator import format_answers
 from tools import LOOKUP_FRAMEWORK_TOOL, WEB_SEARCH_TOOL, handle_tool_call
+from classifier import classify_readiness, log_profile
 
 
 class PipelineError(Exception):
@@ -36,6 +37,10 @@ def analyse_structured(client: Anthropic, answers: list[dict]) -> AnalysisResult
     2. We execute the tool and send the result back
     3. Claude continues until it calls pattern_analysis to return the structured output
     """
+    # Classify readiness before analysis — log only, not yet wired into delivery
+    profile = classify_readiness(client, answers)
+    log_profile(profile)
+
     user_content = format_answers(answers)
     messages = [{"role": "user", "content": user_content}]
     tools = [LOOKUP_FRAMEWORK_TOOL, WEB_SEARCH_TOOL, ANALYSIS_TOOL]
