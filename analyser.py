@@ -5,15 +5,31 @@ Sends validated answers to Claude and returns the pattern analysis.
 Two modes: structured JSON (default) and streaming text (kept for future toggle).
 """
 
+import anthropic as anthropic_sdk
+
+from dataclasses import dataclass, field
 from anthropic import Anthropic
 from prompts import SYSTEM_PROMPT, ANALYSIS_TOOL
 from validator import format_answers
 from tools import LOOKUP_FRAMEWORK_TOOL, WEB_SEARCH_TOOL, handle_tool_call
 
 
-def analyse_structured(client: Anthropic, answers: list[dict]) -> tuple[dict, str, list[dict]]:
+class PipelineError(Exception):
+    """Raised when the analysis pipeline fails. Message is safe to show to the user."""
+    pass
+
+
+@dataclass
+class AnalysisResult:
+    data: dict = field(default_factory=dict)        # structured JSON from Claude
+    text: str = ""                                   # formatted string for evaluator
+    citations: list[dict] = field(default_factory=list)  # source URLs from web search
+
+
+def analyse_structured(client: Anthropic, answers: list[dict]) -> AnalysisResult:
     """Send answers to Claude, get back structured JSON.
-    Returns (data_dict, formatted_string, citations).
+    Returns AnalysisResult(data, text, citations).
+    Raises PipelineError on failure — message is user-friendly.
 
     Tool use loop:
     1. Claude may call lookup_framework or web_search before producing the final analysis
@@ -26,50 +42,66 @@ def analyse_structured(client: Anthropic, answers: list[dict]) -> tuple[dict, st
     citations = []
     force_final = False
 
-    while True:
-        response = client.messages.create(
-            model="claude-sonnet-4-5",
-            max_tokens=2048,
-            system=SYSTEM_PROMPT,
-            tools=tools,
-            tool_choice={"type": "tool", "name": "pattern_analysis"} if force_final else {"type": "auto"},
-            messages=messages,
-        )
+    try:
+        while True:
+            response = client.messages.create(
+                model="claude-sonnet-4-5",
+                max_tokens=2048,
+                system=SYSTEM_PROMPT,
+                tools=tools,
+                tool_choice={"type": "tool", "name": "pattern_analysis"} if force_final else {"type": "auto"},
+                messages=messages,
+            )
 
-        if response.stop_reason == "end_turn":
-            break
+            if response.stop_reason == "end_turn":
+                break
 
-        tool_calls = [b for b in response.content if b.type == "tool_use"]
+            tool_calls = [b for b in response.content if b.type == "tool_use"]
 
-        if not tool_calls:
-            break
+            if not tool_calls:
+                break
 
-        # If Claude called pattern_analysis — we're done
-        for block in tool_calls:
-            if block.name == "pattern_analysis":
-                formatted = format_structured_output(block.input)
-                return block.input, formatted, citations
+            # If Claude called pattern_analysis — we're done
+            for block in tool_calls:
+                if block.name == "pattern_analysis":
+                    if not block.input:
+                        raise PipelineError("The analysis came back empty. Please try again.")
+                    formatted = format_structured_output(block.input)
+                    return AnalysisResult(data=block.input, text=formatted, citations=citations)
 
-        # Claude called a lookup tool — execute it, collect citations, add to history
-        for b in tool_calls:
-            print(f"\n🔧 Tool called: {b.name} | input: {b.input}")
+            # Claude called a lookup tool — execute it, collect citations, add to history
+            for b in tool_calls:
+                print(f"\n🔧 Tool called: {b.name} | input: {b.input}")
 
-        messages.append({"role": "assistant", "content": response.content})
+            messages.append({"role": "assistant", "content": response.content})
 
-        tool_results = []
-        for block in tool_calls:
-            envelope = handle_tool_call(block.name, block.input)
-            citations.extend(envelope["metadata"].get("citations", []))
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": envelope["content"]
-            })
+            tool_results = []
+            for block in tool_calls:
+                envelope = handle_tool_call(block.name, block.input)
+                if envelope["status"] == "error":
+                    print(f"⚠️ Tool error ({block.name}): {envelope['content']}")
+                citations.extend(envelope["metadata"].get("citations", []))
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": envelope["content"]
+                })
 
-        messages.append({"role": "user", "content": tool_results})
-        force_final = True
+            messages.append({"role": "user", "content": tool_results})
+            force_final = True
 
-    return {}, "", []
+    except anthropic_sdk.APIConnectionError:
+        raise PipelineError("Couldn't reach the Anthropic API. Check your internet connection and try again.")
+    except anthropic_sdk.RateLimitError:
+        raise PipelineError("Too many requests. Wait a moment and try again.")
+    except anthropic_sdk.APIStatusError as e:
+        raise PipelineError(f"API error ({e.status_code}). Please try again.")
+    except PipelineError:
+        raise
+    except Exception as e:
+        raise PipelineError(f"Something went wrong during analysis. Please try again. ({type(e).__name__})")
+
+    raise PipelineError("The analysis didn't complete. Please try again.")
 
 
 def format_structured_output(data: dict) -> str:

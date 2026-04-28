@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 from prompts import QUESTIONS
 from validator import validate_answers
-from analyser import analyse_structured
+from analyser import analyse_structured, AnalysisResult, PipelineError
 from evaluator import evaluate_output
 
 
@@ -77,17 +77,25 @@ if run:
     st.divider()
     st.subheader("Pattern Analysis")
 
-    with st.spinner("Running analysis..."):
-        analysis_data, analysis_text, citations = analyse_structured(client, answers)
+    try:
+        with st.spinner("Running analysis..."):
+            result = analyse_structured(client, answers)
+    except PipelineError as e:
+        st.error(str(e))
+        st.stop()
+
+    if not result.data:
+        st.error("The analysis came back empty. Please try again.")
+        st.stop()
 
     # Core pattern
-    core = analysis_data.get("core_pattern", {})
+    core = result.data.get("core_pattern", {})
     st.markdown(f"### {core.get('name', '')}")
     st.caption(core.get("plain_summary", ""))
     st.markdown(core.get("description", ""))
 
     # Secondary pattern
-    secondary = analysis_data.get("secondary_pattern")
+    secondary = result.data.get("secondary_pattern")
     if secondary:
         st.markdown("---")
         st.markdown(f"**Secondary Pattern — {secondary.get('name', '')}**")
@@ -96,23 +104,23 @@ if run:
     # Evidence
     st.markdown("---")
     st.markdown("**Evidence**")
-    for quote in analysis_data.get("evidence", []):
+    for quote in result.data.get("evidence", []):
         st.markdown(f"> {quote}")
 
     # Domains
     st.markdown("---")
     st.markdown("**Where It Shows Up**")
-    cols = st.columns(len(analysis_data.get("domains", [])))
-    for col, domain in zip(cols, analysis_data.get("domains", [])):
+    cols = st.columns(len(result.data.get("domains", [])))
+    for col, domain in zip(cols, result.data.get("domains", [])):
         col.markdown(f"**{domain}**")
 
     # Payoff
     st.markdown("---")
     st.markdown("**What It's Protecting You From**")
-    st.info(analysis_data.get("payoff", ""))
+    st.info(result.data.get("payoff", ""))
 
     # Protocol
-    protocol = analysis_data.get("protocol", {})
+    protocol = result.data.get("protocol", {})
     st.markdown("---")
     st.markdown("**The Protocol**")
     st.markdown(f"🔍 **Detection:** {protocol.get('detection_trigger', '')}")
@@ -129,10 +137,10 @@ if run:
         st.warning(f"**Failure condition:** {fc}")
 
     # Citations — only shown when web search was used
-    if citations:
+    if result.citations:
         st.markdown("---")
         st.markdown("**Further Reading**")
-        for c in citations:
+        for c in result.citations:
             st.markdown(f"- [{c['title']}]({c['url']})")
 
     # Evaluation — runs in both modes
@@ -143,5 +151,5 @@ if run:
             import io, contextlib
             buffer = io.StringIO()
             with contextlib.redirect_stdout(buffer):
-                evaluate_output(client, analysis_text)
+                evaluate_output(client, result.text)
             st.text(buffer.getvalue().strip())
