@@ -27,7 +27,9 @@ class AnalysisResult:
     citations: list[dict] = field(default_factory=list)  # source URLs from web search
 
 
-def analyse_structured(client: Anthropic, answers: list[dict]) -> AnalysisResult:
+THINKING_BUDGET = 2000  # tokens — increase for harder/more ambiguous sessions
+
+def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking: bool = False) -> AnalysisResult:
     """Send answers to Claude, get back structured JSON.
     Returns AnalysisResult(data, text, citations).
     Raises PipelineError on failure — message is user-friendly.
@@ -36,6 +38,9 @@ def analyse_structured(client: Anthropic, answers: list[dict]) -> AnalysisResult
     1. Claude may call lookup_framework or web_search before producing the final analysis
     2. We execute the tool and send the result back
     3. Claude continues until it calls pattern_analysis to return the structured output
+
+    extended_thinking: if True, enables extended thinking on the first (agentic) call only.
+    Disabled on the force_final call — forced tool_choice + thinking has constraints.
     """
     # Classify readiness — profile shapes delivery mode
     profile = classify_readiness(client, answers)
@@ -50,9 +55,19 @@ def analyse_structured(client: Anthropic, answers: list[dict]) -> AnalysisResult
 
     try:
         while True:
+            # Extended thinking only on the first call — not when forcing pattern_analysis
+            thinking_param = (
+                {"type": "enabled", "budget_tokens": THINKING_BUDGET}
+                if extended_thinking and not force_final
+                else {"type": "disabled"}
+            )
+            # max_tokens must exceed budget_tokens when thinking is enabled
+            max_tokens = max(4000, THINKING_BUDGET + 1000) if extended_thinking and not force_final else 2048
+
             response = client.messages.create(
                 model="claude-sonnet-4-5",
-                max_tokens=2048,
+                max_tokens=max_tokens,
+                thinking=thinking_param,
                 system=system_prompt,
                 tools=tools,
                 tool_choice={"type": "tool", "name": "pattern_analysis"} if force_final else {"type": "auto"},

@@ -18,7 +18,7 @@ def format_answers(answers: list[dict]) -> str:
     return formatted
 
 
-def validate_answers(client: Anthropic, answers: list[dict]) -> bool:
+def validate_answers(client: Anthropic, answers: list[dict]) -> list[str]:
     """Use Claude to check answer quality before analysis.
 
     Two checks:
@@ -27,6 +27,8 @@ def validate_answers(client: Anthropic, answers: list[dict]) -> bool:
 
     Note: recurring themes across answers are expected and valid — that's the pattern.
     Do NOT flag answers for being thematically similar.
+
+    Returns a list of error strings — empty list means valid.
     """
 
     # Build paired question + answer block so Claude can check relevance
@@ -62,24 +64,16 @@ def validate_answers(client: Anthropic, answers: list[dict]) -> bool:
     result = response.content[0].text.strip()
     lines = {line.split(":")[0].strip(): line for line in result.splitlines() if ":" in line}
 
-    failed = False
+    errors = []
 
     relevance_line = lines.get("RELEVANCE", "")
     if "INVALID" in relevance_line:
         reason = relevance_line.split("INVALID", 1)[1].strip(" —-")
-        print(f"\n⚠️  Answers off-topic: {reason}")
-        print("Please run again and answer each question directly.")
-        failed = True
+        errors.append(f"Answers off-topic: {reason}")
 
     effort_line = lines.get("EFFORT", "")
     if "INVALID" in effort_line:
         reason = effort_line.split("INVALID", 1)[1].strip(" —-")
-        print(f"\n⚠️  Answers too brief: {reason}")
-        print("Please run again and engage genuinely with each question.")
-        failed = True
+        errors.append(f"Answers too brief: {reason}")
 
-    if failed:
-        print()
-        return False
-
-    return True
+    return errors

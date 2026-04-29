@@ -58,8 +58,13 @@ for i, question in enumerate(QUESTIONS, 1):
     st.write("")
 
 
-# ── Run button ───────────────────────────────────────────────
+# ── Options + Run button ─────────────────────────────────────
 st.divider()
+extended_thinking = st.toggle(
+    "Extended thinking",
+    value=False,
+    help="Gives Claude more reasoning time before analysing. Produces deeper results on ambiguous or sparse answers. Uses more tokens."
+)
 run = st.button("Analyse", type="primary", use_container_width=True)
 
 
@@ -69,17 +74,21 @@ if run:
 
     # Validation
     with st.spinner("Checking input quality..."):
-        valid = validate_answers(client, answers)
+        errors = validate_answers(client, answers)
 
-    if not valid:
+    if errors:
+        for error in errors:
+            st.warning(error)
+        st.info("Please revisit your answers and try again.")
         st.stop()
 
     st.divider()
     st.subheader("Pattern Analysis")
 
     try:
-        with st.spinner("Running analysis..."):
-            result = analyse_structured(client, answers)
+        spinner_msg = "Running analysis (extended thinking enabled)..." if extended_thinking else "Running analysis..."
+        with st.spinner(spinner_msg):
+            result = analyse_structured(client, answers, extended_thinking=extended_thinking)
     except PipelineError as e:
         st.error(str(e))
         st.stop()
