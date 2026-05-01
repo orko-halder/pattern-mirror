@@ -28,6 +28,8 @@ class AnalysisResult:
 
 
 THINKING_BUDGET = 2000  # tokens — increase for harder/more ambiguous sessions
+# NOTE: budget_tokens is deprecated on Sonnet 4.6+ / Opus 4.6+.
+# When upgrading the model, migrate to: thinking={"type": "adaptive"}, effort="medium|high"
 
 def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking: bool = False) -> AnalysisResult:
     """Send answers to Claude, get back structured JSON.
@@ -52,6 +54,7 @@ def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking
     tools = [LOOKUP_FRAMEWORK_TOOL, WEB_SEARCH_TOOL, ANALYSIS_TOOL]
     citations = []
     force_final = False
+    max_tokens = max(4000, THINKING_BUDGET + 1000) if extended_thinking else 2048
 
     try:
         while True:
@@ -61,8 +64,6 @@ def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking
                 if extended_thinking and not force_final
                 else {"type": "disabled"}
             )
-            # max_tokens must exceed budget_tokens when thinking is enabled
-            max_tokens = max(4000, THINKING_BUDGET + 1000) if extended_thinking and not force_final else 2048
 
             response = client.messages.create(
                 model="claude-sonnet-4-5",
@@ -73,6 +74,16 @@ def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking
                 tool_choice={"type": "tool", "name": "pattern_analysis"} if force_final else {"type": "auto"},
                 messages=messages,
             )
+
+            # Truncation on the forced call — retry with hardcoded 2048
+            # Messages are unchanged so Claude starts the schema fresh with more room
+            if response.stop_reason == "max_tokens" and force_final:
+                print(f"⚠️  Analysis truncated at {max_tokens} tokens — retrying at 2048.")
+                max_tokens = 2048
+                continue
+
+            if response.stop_reason == "model_context_window_exceeded":
+                raise PipelineError("The conversation is too long to analyse. Please start a new session.")
 
             if response.stop_reason == "end_turn":
                 break
