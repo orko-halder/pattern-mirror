@@ -92,6 +92,16 @@ ANTHROPIC_API_KEY=...
 TAVILY_API_KEY=...   # optional — web search disabled if missing
 ```
 
+## First-Time Setup (after cloning)
+
+```bash
+source .venv/bin/activate
+pip install ruff
+sh scripts/install-hooks.sh   # installs git pre-commit hook
+```
+
+The pre-commit hook runs `ruff check` on staged `.py` files and blocks commits on lint failures. Run `.venv/bin/ruff check --fix <file>` to auto-fix where possible.
+
 ---
 
 ## What Not To Do

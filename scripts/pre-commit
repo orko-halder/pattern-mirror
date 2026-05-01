@@ -1,0 +1,21 @@
+#!/bin/sh
+# Pattern Mirror — pre-commit ruff check
+# Runs on staged .py files only. Blocks commit if lint fails.
+
+staged_py=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$')
+
+if [ -z "$staged_py" ]; then
+    exit 0  # no Python files staged — nothing to check
+fi
+
+echo "🔍 Running ruff on staged files..."
+.venv/bin/ruff check $staged_py
+
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "❌ Ruff check failed. Fix errors before committing."
+    echo "   Run: .venv/bin/ruff check --fix <file> to auto-fix where possible."
+    exit 1
+fi
+
+echo "✅ Ruff check passed."
