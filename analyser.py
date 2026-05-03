@@ -5,6 +5,7 @@ Sends validated answers to Claude and returns the pattern analysis.
 Two modes: structured JSON (default) and streaming text (kept for future toggle).
 """
 
+import os
 import anthropic as anthropic_sdk
 
 from dataclasses import dataclass, field
@@ -13,6 +14,7 @@ from prompts import SYSTEM_PROMPT, ANALYSIS_TOOL, build_system_prompt
 from validator import format_answers
 from tools import LOOKUP_FRAMEWORK_TOOL, WEB_SEARCH_TOOL, handle_tool_call
 from classifier import classify_readiness, log_profile
+from config import SONNET_MODEL, THINKING_BUDGET, MAX_TOKENS_ANALYSE, MAX_TOKENS_ANALYSE_SHORT, MAX_TOOL_ITERATIONS
 
 
 class PipelineError(Exception):
@@ -26,10 +28,6 @@ class AnalysisResult:
     text: str = ""                                   # formatted string for evaluator
     citations: list[dict] = field(default_factory=list)  # source URLs from web search
 
-
-THINKING_BUDGET = 2000  # tokens — increase for harder/more ambiguous sessions
-# NOTE: budget_tokens is deprecated on Sonnet 4.6+ / Opus 4.6+.
-# When upgrading the model, migrate to: thinking={"type": "adaptive"}, effort="medium|high"
 
 def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking: bool = False) -> AnalysisResult:
     """Send answers to Claude, get back structured JSON.
@@ -51,13 +49,15 @@ def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking
 
     user_content = format_answers(answers)
     messages = [{"role": "user", "content": user_content}]
-    tools = [LOOKUP_FRAMEWORK_TOOL, WEB_SEARCH_TOOL, ANALYSIS_TOOL]
+    tools = [LOOKUP_FRAMEWORK_TOOL, ANALYSIS_TOOL]
+    if os.environ.get("TAVILY_API_KEY"):
+        tools.insert(1, WEB_SEARCH_TOOL)
     citations = []
     force_final = False
-    max_tokens = max(4000, THINKING_BUDGET + 1000) if extended_thinking else 2048
+    max_tokens = max(MAX_TOKENS_ANALYSE, THINKING_BUDGET + 1000) if extended_thinking else MAX_TOKENS_ANALYSE_SHORT
 
     try:
-        while True:
+        for _iteration in range(MAX_TOOL_ITERATIONS):
             # Extended thinking only on the first call — not when forcing pattern_analysis
             thinking_param = (
                 {"type": "enabled", "budget_tokens": THINKING_BUDGET}
@@ -66,7 +66,7 @@ def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking
             )
 
             response = client.messages.create(
-                model="claude-sonnet-4-5",
+                model=SONNET_MODEL,
                 max_tokens=max_tokens,
                 thinking=thinking_param,
                 system=system_prompt,
@@ -75,11 +75,22 @@ def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking
                 messages=messages,
             )
 
-            # Truncation on the forced call — retry with hardcoded 2048
+            # Log thinking block if extended thinking was used
+            for block in response.content:
+                if block.type == "thinking":
+                    print(f"\n🧠 Extended thinking ({len(block.thinking)} chars):\n{block.thinking[:300]}...\n")
+
+            # Truncation on the first call — fail cleanly rather than silently skipping tool enrichment
+            if response.stop_reason == "max_tokens" and not force_final:
+                raise PipelineError("Analysis was interrupted before completing. Please try again.")
+
+            # Truncation on the forced call — retry with larger budget
             # Messages are unchanged so Claude starts the schema fresh with more room
             if response.stop_reason == "max_tokens" and force_final:
-                print(f"⚠️  Analysis truncated at {max_tokens} tokens — retrying at 2048.")
-                max_tokens = 2048
+                if max_tokens >= MAX_TOKENS_ANALYSE:
+                    raise PipelineError("Analysis was too large to complete. Please try again.")
+                print(f"⚠️  Analysis truncated at {max_tokens} tokens — retrying at {MAX_TOKENS_ANALYSE}.")
+                max_tokens = MAX_TOKENS_ANALYSE
                 continue
 
             if response.stop_reason == "model_context_window_exceeded":
@@ -188,8 +199,8 @@ def analyse(client: Anthropic, answers: list[dict]) -> str:
     full_output = []
 
     with client.messages.stream(
-        model="claude-sonnet-4-5",
-        max_tokens=2048,
+        model=SONNET_MODEL,
+        max_tokens=MAX_TOKENS_ANALYSE_SHORT,
         system=SYSTEM_PROMPT,
         messages=[
             {"role": "user", "content": user_content}

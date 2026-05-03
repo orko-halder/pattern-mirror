@@ -16,49 +16,12 @@ To activate one: add to CLASSIFIER_TOOL schema, system prompt signals, derive_de
 """
 
 from anthropic import Anthropic
+from prompts import CLASSIFIER_TOOL
 from validator import format_answers
+from config import HAIKU_MODEL, MAX_TOKENS_CLASSIFY, DeliveryMode
 
 
-CLASSIFIER_TOOL = {
-    "name": "readiness_profile",
-    "description": "Return the readiness profile for this reflection session.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "self_awareness": {
-                "type": "string",
-                "enum": ["low", "medium", "high"],
-                "description": (
-                    "How much the person already sees their own patterns. "
-                    "HIGH: ownership language, nuance, prior reflection evident. "
-                    "MEDIUM: partial ownership, some externalizing. "
-                    "LOW: externalizes consistently, sees themselves only as reaction to others."
-                )
-            },
-            "fragility_risk": {
-                "type": "string",
-                "enum": ["low", "medium", "high"],
-                "description": (
-                    "Risk that direct delivery triggers shutdown, shame spiral, or rejection. "
-                    "HIGH: shame-heavy language, catastrophizing, very defended answers, 'always/never' absolutes. "
-                    "MEDIUM: some defensiveness or anxiety markers but stable overall. "
-                    "LOW: answers feel grounded, curious, or matter-of-fact about difficulty."
-                )
-            },
-            "signal_notes": {
-                "type": "string",
-                "description": (
-                    "1-2 sentences on the specific signals that drove this classification. "
-                    "Quote exact phrases from their answers where possible."
-                )
-            }
-        },
-        "required": ["self_awareness", "fragility_risk", "signal_notes"]
-    }
-}
-
-
-def derive_delivery_mode(profile: dict) -> str:
+def derive_delivery_mode(profile: dict) -> DeliveryMode:
     """Deterministically derive delivery mode from the classified profile.
 
     Fragility is the dominant signal — it determines the floor.
@@ -91,8 +54,8 @@ def classify_readiness(client: Anthropic, answers: list[dict]) -> dict:
 
     try:
         response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=512,
+            model=HAIKU_MODEL,
+            max_tokens=MAX_TOKENS_CLASSIFY,
             system=(
                 "You are a readiness classifier for a psychological pattern analysis tool. "
                 "Your job is to assess how a person's answers reveal their current capacity "

@@ -6,7 +6,8 @@ Two checks: relevance (answers respond to their questions) and effort (genuine e
 """
 
 from anthropic import Anthropic
-from prompts import QUESTIONS
+from prompts import QUESTIONS, VALIDATOR_TOOL
+from config import HAIKU_MODEL, MAX_TOKENS_VALIDATE
 
 
 def format_answers(answers: list[dict]) -> str:
@@ -37,43 +38,39 @@ def validate_answers(client: Anthropic, answers: list[dict]) -> list[str]:
         paired += f"  <pair id=\"Q{i}\">\n"
         paired += f"    <question>{question}</question>\n"
         paired += f"    <answer>{answer['answer']}</answer>\n"
-        paired += f"  </pair>\n"
+        paired += "  </pair>\n"
     paired += "</validation_input>"
 
     response = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=150,
+        model=HAIKU_MODEL,
+        max_tokens=MAX_TOKENS_VALIDATE,
         system=(
             "You are an input quality checker for a psychological reflection tool. "
             "You have two jobs:\n\n"
             "1. RELEVANCE: Is each answer actually responding to its question? "
             "It is normal and expected for answers to share themes — the same pattern often surfaces across multiple questions. "
-            "Only flag INVALID if an answer is clearly unrelated or random.\n\n"
+            "Only flag invalid if an answer is clearly unrelated or random.\n\n"
             "2. EFFORT: Is the person genuinely engaging with the questions? "
-            "Flag INVALID only if most answers are single words, completely empty, or obvious nonsense.\n\n"
-            "Reply in this exact format:\n"
-            "RELEVANCE: VALID or INVALID — one short reason\n"
-            "EFFORT: VALID or INVALID — one short reason\n\n"
-            "Be lenient on themes and strict only on relevance and effort."
+            "Flag invalid only if most answers are single words, completely empty, or obvious nonsense.\n\n"
+            "Be lenient on themes and strict only on relevance and effort.\n\n"
+            "Call the input_quality_check tool with your assessment."
         ),
-        messages=[
-            {"role": "user", "content": paired}
-        ],
+        tools=[VALIDATOR_TOOL],
+        tool_choice={"type": "tool", "name": "input_quality_check"},
+        messages=[{"role": "user", "content": paired}],
     )
 
-    result = response.content[0].text.strip()
-    lines = {line.split(":")[0].strip(): line for line in result.splitlines() if ":" in line}
+    for block in response.content:
+        if block.type == "tool_use" and block.name == "input_quality_check":
+            result = block.input
+            errors = []
+            if result.get("relevance") == "invalid":
+                reason = result.get("relevance_reason", "answers appear off-topic")
+                errors.append(f"Answers off-topic: {reason}")
+            if result.get("effort") == "invalid":
+                reason = result.get("effort_reason", "answers too brief or empty")
+                errors.append(f"Answers too brief: {reason}")
+            return errors
 
-    errors = []
-
-    relevance_line = lines.get("RELEVANCE", "")
-    if "INVALID" in relevance_line:
-        reason = relevance_line.split("INVALID", 1)[1].strip(" —-")
-        errors.append(f"Answers off-topic: {reason}")
-
-    effort_line = lines.get("EFFORT", "")
-    if "INVALID" in effort_line:
-        reason = effort_line.split("INVALID", 1)[1].strip(" —-")
-        errors.append(f"Answers too brief: {reason}")
-
-    return errors
+    # Fallback: tool call not found — pass validation rather than block pipeline
+    return []

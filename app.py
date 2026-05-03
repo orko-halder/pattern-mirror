@@ -12,8 +12,7 @@ from dotenv import load_dotenv
 
 from prompts import QUESTIONS
 from validator import validate_answers
-from analyser import analyse_structured, AnalysisResult, PipelineError
-from evaluator import evaluate_output
+from analyser import analyse_structured, PipelineError
 
 
 # ── Page config ──────────────────────────────────────────────
@@ -152,13 +151,14 @@ if run:
         for c in result.citations:
             st.markdown(f"- [{c['title']}]({c['url']})")
 
-    # Evaluation — runs in both modes
-    st.divider()
-    st.subheader("Quality Evaluation")
-    with st.spinner("Evaluating output..."):
-        with st.expander("See evaluation", expanded=False):
-            import io, contextlib
-            buffer = io.StringIO()
-            with contextlib.redirect_stdout(buffer):
-                evaluate_output(client, result.text)
-            st.text(buffer.getvalue().strip())
+    # Evaluation — disabled for now to save tokens during development
+    # Re-enable before user testing: uncomment the block below
+    # st.divider()
+    # st.subheader("Quality Evaluation")
+    # with st.spinner("Evaluating output..."):
+    #     with st.expander("See evaluation", expanded=False):
+    #         import io, contextlib
+    #         buffer = io.StringIO()
+    #         with contextlib.redirect_stdout(buffer):
+    #             evaluate_output(client, result.text)
+    #         st.text(buffer.getvalue().strip())

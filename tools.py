@@ -97,9 +97,15 @@ def handle_web_search(query: str) -> dict:
 def handle_tool_call(tool_name: str, tool_input: dict) -> dict:
     """Route a tool call to the correct handler. Always returns a standard envelope."""
     if tool_name == "lookup_framework":
-        return handle_lookup_framework(tool_input["framework_key"])
+        key = tool_input.get("framework_key")
+        if not key:
+            return _err("Missing required input: framework_key")
+        return handle_lookup_framework(key)
     if tool_name == "web_search":
-        return handle_web_search(tool_input["query"])
+        query = tool_input.get("query")
+        if not query:
+            return _err("Missing required input: query")
+        return handle_web_search(query)
     return _err(f"Unknown tool: {tool_name}")
 
 

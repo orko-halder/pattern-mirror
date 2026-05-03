@@ -111,3 +111,4 @@ The pre-commit hook runs `ruff check` on staged `.py` files and blocks commits o
 - Do not modify `messages[]` on a truncation retry — the retry works precisely because messages are unchanged
 - Do not show `ThinkingBlock` content to the user — it is Claude's internal monologue
 - Do not raise exceptions from tool handlers — return `_err(content)` instead
+- Do not degrade silently — if a pipeline step fails or is skipped, surface it to the user rather than producing a lower-quality result without them knowing

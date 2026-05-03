@@ -253,3 +253,126 @@ ANALYSIS_TOOL = {
         "required": ["core_pattern", "evidence", "domains", "payoff", "protocol"]
     }
 }
+
+CLASSIFIER_TOOL = {
+    "name": "readiness_profile",
+    "description": "Return the readiness profile for this reflection session.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "self_awareness": {
+                "type": "string",
+                "enum": ["low", "medium", "high"],
+                "description": (
+                    "How much the person already sees their own patterns. "
+                    "HIGH: ownership language, nuance, prior reflection evident. "
+                    "MEDIUM: partial ownership, some externalizing. "
+                    "LOW: externalizes consistently, sees themselves only as reaction to others."
+                )
+            },
+            "fragility_risk": {
+                "type": "string",
+                "enum": ["low", "medium", "high"],
+                "description": (
+                    "Risk that direct delivery triggers shutdown, shame spiral, or rejection. "
+                    "HIGH: shame-heavy language, catastrophizing, very defended answers, 'always/never' absolutes. "
+                    "MEDIUM: some defensiveness or anxiety markers but stable overall. "
+                    "LOW: answers feel grounded, curious, or matter-of-fact about difficulty."
+                )
+            },
+            "signal_notes": {
+                "type": "string",
+                "description": (
+                    "1-2 sentences on the specific signals that drove this classification. "
+                    "Quote exact phrases from their answers where possible."
+                )
+            }
+        },
+        "required": ["self_awareness", "fragility_risk", "signal_notes"]
+    }
+}
+
+VALIDATOR_TOOL = {
+    "name": "input_quality_check",
+    "description": "Return the input quality check for this reflection session.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "relevance": {
+                "type": "string",
+                "enum": ["valid", "invalid"],
+                "description": (
+                    "VALID if each answer responds to its question. "
+                    "INVALID if one or more answers are clearly unrelated or random. "
+                    "Thematic overlap between answers is expected — do not flag it."
+                )
+            },
+            "relevance_reason": {
+                "type": "string",
+                "description": "Short reason. Required if relevance is invalid."
+            },
+            "effort": {
+                "type": "string",
+                "enum": ["valid", "invalid"],
+                "description": (
+                    "VALID if the person is genuinely engaging. "
+                    "INVALID if most answers are single words, completely empty, or obvious nonsense."
+                )
+            },
+            "effort_reason": {
+                "type": "string",
+                "description": "Short reason. Required if effort is invalid."
+            }
+        },
+        "required": ["relevance", "effort"]
+    }
+}
+
+EVALUATOR_TOOL = {
+    "name": "quality_evaluation",
+    "description": "Return the quality evaluation scores for this analysis output.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "pattern_accuracy": {
+                "type": "integer",
+                "description": (
+                    "Score 1-10. Did it identify a specific, precise pattern or a vague generalisation? "
+                    "1 = generic, could apply to anyone. 10 = precise, clearly grounded in the answers."
+                )
+            },
+            "pattern_accuracy_reason": {
+                "type": "string",
+                "description": "One short reason for the pattern accuracy score."
+            },
+            "protocol_deployability": {
+                "type": "integer",
+                "description": (
+                    "Score 1-10. Is the protocol concrete enough to use tomorrow morning? "
+                    "1 = generic advice. 10 = specific steps deployable in a real moment of pattern activation."
+                )
+            },
+            "protocol_deployability_reason": {
+                "type": "string",
+                "description": "One short reason for the protocol deployability score."
+            },
+            "strengths": {
+                "type": "string",
+                "description": "One sentence on what the analysis does well."
+            },
+            "weaknesses": {
+                "type": "string",
+                "description": "One sentence on what the analysis could improve."
+            },
+            "reasoning": {
+                "type": "string",
+                "description": "One sentence explaining the scores based on the content of the analysis output."
+            }
+        },
+        "required": [
+            "pattern_accuracy", "pattern_accuracy_reason",
+            "protocol_deployability", "protocol_deployability_reason",
+            "strengths", "weaknesses", "reasoning"
+        ]
+    }
+}
