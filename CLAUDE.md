@@ -99,6 +99,20 @@ ANTHROPIC_API_KEY=...
 TAVILY_API_KEY=...   # optional — web search disabled if missing
 ```
 
+## Skills
+
+Project-specific skills live in `skills/`. Install them by double-clicking the `.skill` files in the Antarjyoti folder — they install globally in Claude, not per-project.
+
+| Skill | Trigger | What it does |
+|---|---|---|
+| `pm-code-review` | "review the code", "any concerns" | Checks files against CLAUDE.md constraints |
+| `cca-sprint-debrief` | "debrief the sprint", "update exam doc" | Extracts Claude API concepts → CCA_Exam_Reference.md |
+| `pm-commit` | "ready to commit", "commit message" | Lints staged files, generates commit message |
+
+When CLAUDE.md rules change, update the corresponding skill source in `skills/` and repackage.
+
+---
+
 ## First-Time Setup (after cloning)
 
 ```bash
