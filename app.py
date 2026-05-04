@@ -13,6 +13,8 @@ from dotenv import load_dotenv
 from prompts import QUESTIONS
 from validator import validate_answers
 from analyser import analyse_structured, PipelineError
+from middleware import pre_process, post_process
+from config import SONNET_MODEL
 
 
 # ── Page config ──────────────────────────────────────────────
@@ -71,6 +73,16 @@ run = st.button("Analyse", type="primary", use_container_width=True)
 if run:
     client = get_client()
 
+    # Pre-processing — deterministic checks, no Claude calls
+    pre = pre_process(answers)
+    if pre.warnings:
+        for warning in pre.warnings:
+            st.warning(warning)
+    if pre.blocked:
+        for error in pre.errors:
+            st.error(error)
+        st.stop()
+
     # Validation
     with st.spinner("Checking input quality..."):
         errors = validate_answers(client, answers)
@@ -95,6 +107,14 @@ if run:
     if not result.data:
         st.error("The analysis came back empty. Please try again.")
         st.stop()
+
+    # Post-processing — cost logging + safety filter
+    post = post_process(result.data, result.usage, SONNET_MODEL)
+    if post.warnings:
+        for warning in post.warnings:
+            st.warning(warning)
+    with st.expander("📊 Token usage", expanded=False):
+        st.caption(post.cost_summary)
 
     # Core pattern
     core = result.data.get("core_pattern", {})

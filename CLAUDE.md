@@ -12,6 +12,7 @@ This is also a learning project for the Claude Certified Architect exam. Every m
 
 ```
 app.py          Streamlit UI — gatekeeper, renders results
+middleware.py   Pre/post processing — token estimate, crisis check, PII, cost log, safety filter
 validator.py    Input quality check (Haiku) — runs before analysis
 classifier.py   Readiness classifier (Haiku) — shapes delivery mode
 analyser.py     Main pipeline (Sonnet) — tool use loop, returns AnalysisResult
@@ -21,11 +22,17 @@ evaluator.py    Output quality scorer (Haiku) — runs after analysis
 frameworks.json Local knowledge base of psychological frameworks
 ```
 
-**Flow:** `app.py` → `validate_answers()` → `classify_readiness()` → `analyse_structured()` → `evaluate_output()`
+**Flow:** `app.py` → `pre_process()` → `validate_answers()` → `classify_readiness()` → `analyse_structured()` → `post_process()` → `evaluate_output()`
 
 ---
 
 ## Module Responsibilities
+
+**`middleware.py`** — no Claude calls. All checks are deterministic (regex, arithmetic).
+- Pre-processing: `pre_process(answers) → PreCheckResult`. Runs before `validate_answers()`. `blocked=True` stops the pipeline; `warnings` are shown but don't block.
+- Post-processing: `post_process(result_data, usage, model) → PostCheckResult`. Runs after `analyse_structured()`. Logs cost to console and returns it in `cost_summary`.
+- Crisis check is a hard block. PII detection is warn-only — users may mention contact details in context.
+- `AnalysisResult.usage` accumulates `input_tokens` + `output_tokens` across all API calls in the tool use loop.
 
 **`prompts.py`** — single source of truth for all prompt text and tool schemas. Change prompts here, not in the pipeline. `build_system_prompt(delivery_mode)` appends delivery instructions to the base system prompt.
 

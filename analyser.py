@@ -27,6 +27,7 @@ class AnalysisResult:
     data: dict = field(default_factory=dict)        # structured JSON from Claude
     text: str = ""                                   # formatted string for evaluator
     citations: list[dict] = field(default_factory=list)  # source URLs from web search
+    usage: dict = field(default_factory=dict)        # cumulative token usage across all API calls
 
 
 def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking: bool = False) -> AnalysisResult:
@@ -54,6 +55,7 @@ def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking
         tools.insert(1, WEB_SEARCH_TOOL)
     citations = []
     force_final = False
+    total_usage = {"input_tokens": 0, "output_tokens": 0}
     max_tokens = max(MAX_TOKENS_ANALYSE, THINKING_BUDGET + 1000) if extended_thinking else MAX_TOKENS_ANALYSE_SHORT
 
     try:
@@ -74,6 +76,10 @@ def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking
                 tool_choice={"type": "tool", "name": "pattern_analysis"} if force_final else {"type": "auto"},
                 messages=messages,
             )
+
+            # Accumulate token usage across all calls in the loop
+            total_usage["input_tokens"] += response.usage.input_tokens
+            total_usage["output_tokens"] += response.usage.output_tokens
 
             # Log thinking block if extended thinking was used
             for block in response.content:
@@ -110,7 +116,7 @@ def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking
                     if not block.input:
                         raise PipelineError("The analysis came back empty. Please try again.")
                     formatted = format_structured_output(block.input)
-                    return AnalysisResult(data=block.input, text=formatted, citations=citations)
+                    return AnalysisResult(data=block.input, text=formatted, citations=citations, usage=total_usage)
 
             # Claude called a lookup tool — execute it, collect citations, add to history
             for b in tool_calls:
