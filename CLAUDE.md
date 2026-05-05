@@ -11,22 +11,30 @@ This is also a learning project for the Claude Certified Architect exam. Every m
 ## Architecture
 
 ```
-app.py          Streamlit UI — gatekeeper, renders results
-middleware.py   Pre/post processing — token estimate, crisis check, PII, cost log, safety filter
-validator.py    Input quality check (Haiku) — runs before analysis
-classifier.py   Readiness classifier (Haiku) — shapes delivery mode
-analyser.py     Main pipeline (Sonnet) — tool use loop, returns AnalysisResult
-prompts.py      All prompts, tool schemas, delivery variants — no logic here
-tools.py        Tool handlers + schemas — framework lookup, web search
-evaluator.py    Output quality scorer (Haiku) — runs after analysis
-frameworks.json Local knowledge base of psychological frameworks
+app.py           Streamlit UI — gatekeeper, renders results
+middleware.py    Pre/post processing — token estimate, crisis check, PII, cost log, safety filter
+file_context.py  Files API — upload/delete context documents, build document blocks
+validator.py     Input quality check (Haiku) — runs before analysis
+classifier.py    Readiness classifier (Haiku) — shapes delivery mode
+analyser.py      Main pipeline (Sonnet) — tool use loop, returns AnalysisResult
+prompts.py       All prompts, tool schemas, delivery variants — no logic here
+tools.py         Tool handlers + schemas — framework lookup, web search
+evaluator.py     Output quality scorer (Haiku) — runs after analysis
+frameworks.json  Local knowledge base of psychological frameworks
 ```
 
-**Flow:** `app.py` → `pre_process()` → `validate_answers()` → `classify_readiness()` → `analyse_structured()` → `post_process()` → `evaluate_output()`
+**Flow:** `app.py` → `pre_process()` → `upload_context_file()` (optional) → `validate_answers()` → `classify_readiness()` → `analyse_structured()` → `post_process()` → `evaluate_output()`
 
 ---
 
 ## Module Responsibilities
+
+**`file_context.py`** — Files API wrapper. No Claude inference calls.
+- `upload_context_file(client, file_bytes, filename) → UploadedFile` — validates type/size, uploads, returns `file_id`.
+- `delete_file(client, file_id)` — swallows errors so pipeline cleanup is never interrupted.
+- `build_document_block(file_id) → dict` — returns the document content block for use in `messages`.
+- Supported types: `.txt`, `.md`, `.pdf`. Max size: 5 MB.
+- Files are ephemeral — always call `delete_file()` after use (app.py does this in a `finally` block).
 
 **`middleware.py`** — no Claude calls. All checks are deterministic (regex, arithmetic).
 - Pre-processing: `pre_process(answers) → PreCheckResult`. Runs before `validate_answers()`. `blocked=True` stops the pipeline; `warnings` are shown but don't block.
@@ -63,6 +71,8 @@ frameworks.json Local knowledge base of psychological frameworks
 - **Tool handlers always return the envelope shape.** Never return raw strings from a tool handler.
 - **Delivery mode only affects framing sections** (core_pattern, secondary_pattern, evidence, payoff). The protocol must be concrete regardless of delivery mode — see `_PROTOCOL_SCOPE_NOTE` in `prompts.py`.
 - **`extended_thinking` on `claude-sonnet-4-5` requires `thinking.type: "enabled"` + `budget_tokens`.** When upgrading to Sonnet 4.6+, migrate to `thinking.type: "adaptive"` + `effort`.
+- **Files API requires `client.beta.messages.create` with `betas=["files-api-2025-04-14"]`.** When `context_file_id` is set, `analyser.py` uses this for all calls in the loop — the document block lives in the first user message which is replayed every turn.
+- **Context files must be deleted after use.** `app.py` wraps the full pipeline in `try/finally` to ensure `delete_file()` is always called, even when `st.stop()` is raised mid-pipeline.
 
 ---
 

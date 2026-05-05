@@ -131,15 +131,65 @@ def pii_detect(answers: list[dict]) -> list[str]:
     return warnings
 
 
+_EMPTY_ANSWER = "[no answer given]"
+_EMPTY_BLOCK_THRESHOLD = 6   # all questions empty → hard block
+_EMPTY_WARN_THRESHOLD = 4    # 4+ empty → warn, validator decides
+
+
+def empty_check(answers: list[dict], has_context_file: bool = False) -> tuple[list[str], list[str]]:
+    """Check how many questions were left unanswered.
+
+    Returns (errors, warnings).
+
+    Without a context file:
+      All empty → hard block. 4+ empty → warn, pipeline continues.
+
+    With a context file:
+      All empty → warn only (document is the primary source).
+      4+ empty → info note, pipeline continues.
+    """
+    empty_count = sum(1 for a in answers if a.get("answer", "") == _EMPTY_ANSWER)
+    answered = len(answers) - empty_count
+
+    if empty_count >= _EMPTY_BLOCK_THRESHOLD:
+        if has_context_file:
+            return (
+                [],
+                [
+                    "No questions answered — Claude will use your uploaded document as the "
+                    "primary source and treat the 6 questions as a structural framework."
+                ],
+            )
+        return (
+            ["Please answer at least one question before running the analysis."],
+            [],
+        )
+
+    if empty_count >= _EMPTY_WARN_THRESHOLD:
+        return (
+            [],
+            [
+                f"Only {answered} of {len(answers)} questions answered. "
+                "The analysis may be limited — more context produces better results."
+            ],
+        )
+
+    return [], []
+
+
 # ── Pre-process entry point ────────────────────────────────────
 
-def pre_process(answers: list[dict]) -> PreCheckResult:
+def pre_process(answers: list[dict], has_context_file: bool = False) -> PreCheckResult:
     """Run all pre-processing checks. Call before validate_answers().
 
     Checks run in priority order:
-    1. Token estimate (block if extreme, warn if large)
-    2. Crisis language (hard block)
-    3. PII detection (warn only)
+    1. Empty answers (block if all empty with no file, warn otherwise)
+    2. Token estimate (block if extreme, warn if large)
+    3. Crisis language (hard block)
+    4. PII detection (warn only)
+
+    has_context_file: when True, all-empty answers become a warning not a block —
+    the uploaded document is treated as the primary reflection source.
 
     Returns PreCheckResult:
       blocked=True  → pipeline must not run; show errors
@@ -147,7 +197,15 @@ def pre_process(answers: list[dict]) -> PreCheckResult:
     """
     result = PreCheckResult()
 
-    # 1. Token estimate
+    # 1. Empty answers — cheapest check, run first
+    empty_errors, empty_warnings = empty_check(answers, has_context_file)
+    result.errors.extend(empty_errors)
+    result.warnings.extend(empty_warnings)
+    if result.errors:
+        result.blocked = True
+        return result
+
+    # 2. Token estimate
     result.token_estimate = estimate_tokens(answers)
     if result.token_estimate > _TOKEN_BLOCK_THRESHOLD:
         result.errors.append(
@@ -160,12 +218,12 @@ def pre_process(answers: list[dict]) -> PreCheckResult:
             "Analysis will still run."
         )
 
-    # 2. Crisis language — hard block
+    # 3. Crisis language — hard block
     crisis_errors = crisis_check(answers)
     if crisis_errors:
         result.errors.extend(crisis_errors)
 
-    # 3. PII — warn only
+    # 4. PII — warn only
     result.warnings.extend(pii_detect(answers))
 
     result.blocked = len(result.errors) > 0

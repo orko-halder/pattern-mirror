@@ -3,10 +3,18 @@ Pattern Mirror — input validation.
 
 Checks answer quality before passing to the analysis pipeline.
 Two checks: relevance (answers respond to their questions) and effort (genuine engagement).
+
+Also provides validate_context_file() — a Haiku relevance check for uploaded documents.
 """
 
 from anthropic import Anthropic
-from prompts import QUESTIONS, VALIDATOR_TOOL
+from prompts import (
+    QUESTIONS,
+    VALIDATOR_TOOL,
+    VALIDATOR_SYSTEM_PROMPT,
+    CONTEXT_RELEVANCE_TOOL,
+    CONTEXT_RELEVANCE_SYSTEM_PROMPT,
+)
 from config import HAIKU_MODEL, MAX_TOKENS_VALIDATE
 
 
@@ -44,17 +52,7 @@ def validate_answers(client: Anthropic, answers: list[dict]) -> list[str]:
     response = client.messages.create(
         model=HAIKU_MODEL,
         max_tokens=MAX_TOKENS_VALIDATE,
-        system=(
-            "You are an input quality checker for a psychological reflection tool. "
-            "You have two jobs:\n\n"
-            "1. RELEVANCE: Is each answer actually responding to its question? "
-            "It is normal and expected for answers to share themes — the same pattern often surfaces across multiple questions. "
-            "Only flag invalid if an answer is clearly unrelated or random.\n\n"
-            "2. EFFORT: Is the person genuinely engaging with the questions? "
-            "Flag invalid only if most answers are single words, completely empty, or obvious nonsense.\n\n"
-            "Be lenient on themes and strict only on relevance and effort.\n\n"
-            "Call the input_quality_check tool with your assessment."
-        ),
+        system=VALIDATOR_SYSTEM_PROMPT,
         tools=[VALIDATOR_TOOL],
         tool_choice={"type": "tool", "name": "input_quality_check"},
         messages=[{"role": "user", "content": paired}],
@@ -73,4 +71,51 @@ def validate_answers(client: Anthropic, answers: list[dict]) -> list[str]:
             return errors
 
     # Fallback: tool call not found — pass validation rather than block pipeline
+    return []
+
+
+def validate_context_file(client: Anthropic, file_id: str) -> list[str]:
+    """Check whether the uploaded context file is relevant to psychological pattern analysis.
+
+    Uses Haiku + Files API for a cheap relevance check before the main analysis.
+    Returns a list of warning strings — empty list means the document is usable.
+
+    Irrelevant documents (recipes, technical docs, code) get a warning so the
+    user can swap the file out rather than silently polluting the analysis.
+    """
+    response = client.beta.messages.create(
+        model=HAIKU_MODEL,
+        max_tokens=256,
+        betas=["files-api-2025-04-14"],
+        system=CONTEXT_RELEVANCE_SYSTEM_PROMPT,
+        tools=[CONTEXT_RELEVANCE_TOOL],
+        tool_choice={"type": "tool", "name": "context_relevance_check"},
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "document",
+                    "source": {"type": "file", "file_id": file_id},
+                },
+                {
+                    "type": "text",
+                    "text": "Is this document relevant to psychological pattern analysis?",
+                },
+            ],
+        }],
+    )
+
+    for block in response.content:
+        if block.type == "tool_use" and block.name == "context_relevance_check":
+            if not block.input.get("is_relevant", True):
+                reason = block.input.get("reason", "")
+                return [
+                    f"The uploaded document doesn't appear relevant to psychological pattern analysis"
+                    f"{f' — {reason}' if reason else ''}. "
+                    "You can remove it and continue with your answers, or keep it and Claude will "
+                    "focus on your answers instead."
+                ]
+            return []
+
+    # Fallback: tool call not found — treat as relevant, don't block
     return []

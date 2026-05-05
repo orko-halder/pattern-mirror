@@ -50,7 +50,10 @@ def main() -> None:
     answers = collect_answers()
 
     print("\nChecking input quality...")
-    if not validate_answers(client, answers):
+    errors = validate_answers(client, answers)
+    if errors:
+        for error in errors:
+            print(f"✗ {error}")
         raise SystemExit(1)
 
     print("\nRunning analysis...")

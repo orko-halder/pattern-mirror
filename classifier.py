@@ -16,7 +16,7 @@ To activate one: add to CLASSIFIER_TOOL schema, system prompt signals, derive_de
 """
 
 from anthropic import Anthropic
-from prompts import CLASSIFIER_TOOL
+from prompts import CLASSIFIER_TOOL, CLASSIFIER_SYSTEM_PROMPT
 from validator import format_answers
 from config import HAIKU_MODEL, MAX_TOKENS_CLASSIFY, DeliveryMode
 
@@ -56,25 +56,7 @@ def classify_readiness(client: Anthropic, answers: list[dict]) -> dict:
         response = client.messages.create(
             model=HAIKU_MODEL,
             max_tokens=MAX_TOKENS_CLASSIFY,
-            system=(
-                "You are a readiness classifier for a psychological pattern analysis tool. "
-                "Your job is to assess how a person's answers reveal their current capacity "
-                "to receive and integrate direct feedback about themselves.\n\n"
-                "Read the 6 answers as a set. Look for:\n\n"
-                "SELF-AWARENESS signals:\n"
-                "- Ownership language: 'I notice I...', 'I tend to...', 'I know I do this'\n"
-                "- Prior reflection: references to therapy, patterns they've seen before\n"
-                "- Nuance: holding complexity, acknowledging their own role in outcomes\n"
-                "- Externalizing: 'they made me feel', 'it just happened', 'people always'\n\n"
-                "FRAGILITY signals:\n"
-                "- Shame language: 'I'm terrible at', 'I hate that I', 'I'm such a'\n"
-                "- Catastrophizing: 'everything falls apart', 'nothing ever works'\n"
-                "- Heavy defense: very short answers, deflections, answering a different question\n"
-                "- Anxiety markers: urgency, hypervigilance language, worst-case framing\n\n"
-                "Important: vague answers are ambiguous — they can signal defense OR limited "
-                "self-vocabulary. Weight other signals before concluding on vagueness alone.\n\n"
-                "Call the readiness_profile tool with your assessment."
-            ),
+            system=CLASSIFIER_SYSTEM_PROMPT,
             tools=[CLASSIFIER_TOOL],
             tool_choice={"type": "tool", "name": "readiness_profile"},
             messages=[{"role": "user", "content": user_content}]

@@ -158,6 +158,58 @@ def build_system_prompt(delivery_mode: str) -> str:
     delivery = _DELIVERY_MAP.get(delivery_mode, _DELIVERY_PACED)
     return SYSTEM_PROMPT + delivery
 
+CONTEXT_FILE_INSTRUCTION = """The user has uploaded this document as additional context for their reflection. \
+It may be a previous journal entry, prior session notes, diary writing, or related personal reflection.
+
+How to use it:
+- If the user's answers below are detailed: use the document as background — look for continuity \
+or evolution of patterns across what they've written previously and their current answers.
+- If the user's answers are sparse or absent: treat the document as the primary reflection \
+material and use the 6 questions as a structural framework to extract and organise patterns from it.
+- In both cases, quote from both the document and the answers in your Evidence section where relevant.
+
+If the document contains no material relevant to psychological pattern analysis, \
+focus on the answers alone and note that the document was not usable."""
+
+
+CONTEXT_RELEVANCE_SYSTEM_PROMPT = (
+    "You are a relevance checker for a psychological pattern analysis tool. "
+    "A user has uploaded a document as context for their reflection session.\n\n"
+    "Your job: decide whether the document contains material that could inform "
+    "a psychological pattern analysis — personal reflections, emotional experiences, "
+    "relationships, recurring situations, thoughts about the self, or human behaviour.\n\n"
+    "RELEVANT: journal entries, diary entries, personal letters, therapy notes, "
+    "life writing, personal essays, prior reflection sessions, or any text where a "
+    "person writes about their own experience, feelings, or relationships.\n\n"
+    "IRRELEVANT: recipes, technical documents, academic papers with no personal content, "
+    "code files, product manuals, news articles, or anything with no connection to "
+    "personal human experience.\n\n"
+    "Call the context_relevance_check tool with your assessment."
+)
+
+CONTEXT_RELEVANCE_TOOL = {
+    "name": "context_relevance_check",
+    "description": "Assess whether the uploaded document is relevant for psychological pattern analysis.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "is_relevant": {
+                "type": "boolean",
+                "description": (
+                    "True if the document contains personal reflection, emotional experience, "
+                    "or human behaviour relevant to pattern analysis. False if it is a technical, "
+                    "factual, or otherwise impersonal document."
+                )
+            },
+            "reason": {
+                "type": "string",
+                "description": "One sentence explaining the assessment."
+            }
+        },
+        "required": ["is_relevant", "reason"]
+    }
+}
+
 ANALYSIS_TOOL = {
     "name": "pattern_analysis",
     "description": "Return the structured pattern analysis for the reflection session.",
@@ -254,6 +306,26 @@ ANALYSIS_TOOL = {
     }
 }
 
+CLASSIFIER_SYSTEM_PROMPT = (
+    "You are a readiness classifier for a psychological pattern analysis tool. "
+    "Your job is to assess how a person's answers reveal their current capacity "
+    "to receive and integrate direct feedback about themselves.\n\n"
+    "Read the 6 answers as a set. Look for:\n\n"
+    "SELF-AWARENESS signals:\n"
+    "- Ownership language: 'I notice I...', 'I tend to...', 'I know I do this'\n"
+    "- Prior reflection: references to therapy, patterns they've seen before\n"
+    "- Nuance: holding complexity, acknowledging their own role in outcomes\n"
+    "- Externalizing: 'they made me feel', 'it just happened', 'people always'\n\n"
+    "FRAGILITY signals:\n"
+    "- Shame language: 'I'm terrible at', 'I hate that I', 'I'm such a'\n"
+    "- Catastrophizing: 'everything falls apart', 'nothing ever works'\n"
+    "- Heavy defense: very short answers, deflections, answering a different question\n"
+    "- Anxiety markers: urgency, hypervigilance language, worst-case framing\n\n"
+    "Important: vague answers are ambiguous — they can signal defense OR limited "
+    "self-vocabulary. Weight other signals before concluding on vagueness alone.\n\n"
+    "Call the readiness_profile tool with your assessment."
+)
+
 CLASSIFIER_TOOL = {
     "name": "readiness_profile",
     "description": "Return the readiness profile for this reflection session.",
@@ -292,6 +364,18 @@ CLASSIFIER_TOOL = {
     }
 }
 
+VALIDATOR_SYSTEM_PROMPT = (
+    "You are an input quality checker for a psychological reflection tool. "
+    "You have two jobs:\n\n"
+    "1. RELEVANCE: Is each answer actually responding to its question? "
+    "It is normal and expected for answers to share themes — the same pattern often surfaces across multiple questions. "
+    "Only flag invalid if an answer is clearly unrelated or random.\n\n"
+    "2. EFFORT: Is the person genuinely engaging with the questions? "
+    "Flag invalid only if most answers are single words, completely empty, or obvious nonsense.\n\n"
+    "Be lenient on themes and strict only on relevance and effort.\n\n"
+    "Call the input_quality_check tool with your assessment."
+)
+
 VALIDATOR_TOOL = {
     "name": "input_quality_check",
     "description": "Return the input quality check for this reflection session.",
@@ -327,6 +411,16 @@ VALIDATOR_TOOL = {
         "required": ["relevance", "effort"]
     }
 }
+
+EVALUATOR_SYSTEM_PROMPT = (
+    "You are a quality evaluator for a human psychological pattern analysis tool. "
+    "Score the analysis on two dimensions, each from 1 to 10.\n\n"
+    "PATTERN ACCURACY (1-10): Did it identify a specific, precise pattern — or a vague generalisation?\n"
+    "1 = generic and could apply to anyone. 10 = precise, specific, clearly grounded in the answers.\n\n"
+    "PROTOCOL DEPLOYABILITY (1-10): Is the protocol concrete enough to use tomorrow morning?\n"
+    "1 = generic advice. 10 = specific steps deployable in a real moment of pattern activation.\n\n"
+    "Call the quality_evaluation tool with your scores and reasoning."
+)
 
 EVALUATOR_TOOL = {
     "name": "quality_evaluation",

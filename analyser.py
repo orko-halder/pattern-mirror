@@ -6,14 +6,17 @@ Two modes: structured JSON (default) and streaming text (kept for future toggle)
 """
 
 import os
+import functools
 import anthropic as anthropic_sdk
 
 from dataclasses import dataclass, field
+from typing import Optional
 from anthropic import Anthropic
 from prompts import SYSTEM_PROMPT, ANALYSIS_TOOL, build_system_prompt
 from validator import format_answers
 from tools import LOOKUP_FRAMEWORK_TOOL, WEB_SEARCH_TOOL, handle_tool_call
 from classifier import classify_readiness, log_profile
+from file_context import build_document_block
 from config import SONNET_MODEL, THINKING_BUDGET, MAX_TOKENS_ANALYSE, MAX_TOKENS_ANALYSE_SHORT, MAX_TOOL_ITERATIONS
 
 
@@ -30,7 +33,12 @@ class AnalysisResult:
     usage: dict = field(default_factory=dict)        # cumulative token usage across all API calls
 
 
-def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking: bool = False) -> AnalysisResult:
+def analyse_structured(
+    client: Anthropic,
+    answers: list[dict],
+    extended_thinking: bool = False,
+    context_file_id: Optional[str] = None,
+) -> AnalysisResult:
     """Send answers to Claude, get back structured JSON.
     Returns AnalysisResult(data, text, citations).
     Raises PipelineError on failure — message is user-friendly.
@@ -42,13 +50,29 @@ def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking
 
     extended_thinking: if True, enables extended thinking on the first (agentic) call only.
     Disabled on the force_final call — forced tool_choice + thinking has constraints.
+
+    context_file_id: optional Anthropic file ID from client.beta.files.upload().
+    When provided, the file is prepended as a document block in the user message.
+    Uses client.beta.messages.create with the files-api beta header for all calls
+    in the loop (the first message retains the document block throughout).
     """
     # Classify readiness — profile shapes delivery mode
     profile = classify_readiness(client, answers)
     log_profile(profile)
     system_prompt = build_system_prompt(profile["delivery_mode"])
 
-    user_content = format_answers(answers)
+    user_text = format_answers(answers)
+
+    # If a context file was uploaded, prepend it as a document block.
+    # The beta header is required for all calls in the loop because the document
+    # block lives in the first user message which is replayed on every turn.
+    if context_file_id:
+        user_content = [build_document_block(context_file_id), {"type": "text", "text": user_text}]
+        _create = functools.partial(client.beta.messages.create, betas=["files-api-2025-04-14"])
+    else:
+        user_content = user_text
+        _create = client.messages.create
+
     messages = [{"role": "user", "content": user_content}]
     tools = [LOOKUP_FRAMEWORK_TOOL, ANALYSIS_TOOL]
     if os.environ.get("TAVILY_API_KEY"):
@@ -67,7 +91,7 @@ def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking
                 else {"type": "disabled"}
             )
 
-            response = client.messages.create(
+            response = _create(
                 model=SONNET_MODEL,
                 max_tokens=max_tokens,
                 thinking=thinking_param,
@@ -80,11 +104,6 @@ def analyse_structured(client: Anthropic, answers: list[dict], extended_thinking
             # Accumulate token usage across all calls in the loop
             total_usage["input_tokens"] += response.usage.input_tokens
             total_usage["output_tokens"] += response.usage.output_tokens
-
-            # Log thinking block if extended thinking was used
-            for block in response.content:
-                if block.type == "thinking":
-                    print(f"\n🧠 Extended thinking ({len(block.thinking)} chars):\n{block.thinking[:300]}...\n")
 
             # Truncation on the first call — fail cleanly rather than silently skipping tool enrichment
             if response.stop_reason == "max_tokens" and not force_final:

@@ -11,9 +11,10 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from prompts import QUESTIONS
-from validator import validate_answers
+from validator import validate_answers, validate_context_file
 from analyser import analyse_structured, PipelineError
 from middleware import pre_process, post_process
+from file_context import upload_context_file, delete_file
 from config import SONNET_MODEL
 
 
@@ -39,6 +40,25 @@ def get_client():
 # ── Header ───────────────────────────────────────────────────
 st.title("🪞 Pattern Mirror")
 st.caption("Answer honestly. Incomplete is fine. There are no right answers.")
+st.divider()
+
+
+# ── Context file (optional) ──────────────────────────────────
+with st.expander("📎 Add context (optional)"):
+    st.caption(
+        "Upload a previous journal entry, prior session notes, or related writing. "
+        "Claude will read it before analysing your answers below."
+    )
+    uploaded_file = st.file_uploader(
+        "Choose a file",
+        type=["txt", "md", "pdf"],
+        label_visibility="collapsed",
+        key="context_file",
+    )
+    if uploaded_file:
+        size_kb = len(uploaded_file.getvalue()) // 1024
+        st.caption(f"**{uploaded_file.name}** — {size_kb} KB")
+
 st.divider()
 
 
@@ -73,36 +93,67 @@ run = st.button("Analyse", type="primary", use_container_width=True)
 if run:
     client = get_client()
 
-    # Pre-processing — deterministic checks, no Claude calls
-    pre = pre_process(answers)
-    if pre.warnings:
-        for warning in pre.warnings:
-            st.warning(warning)
-    if pre.blocked:
-        for error in pre.errors:
-            st.error(error)
-        st.stop()
-
-    # Validation
-    with st.spinner("Checking input quality..."):
-        errors = validate_answers(client, answers)
-
-    if errors:
-        for error in errors:
-            st.warning(error)
-        st.info("Please revisit your answers and try again.")
-        st.stop()
-
-    st.divider()
-    st.subheader("Pattern Analysis")
-
+    # Upload, validate, analyse — all inside one try/finally so the context
+    # file is always deleted even if validation fails or st.stop() is called.
+    context_file_id = None
+    result = None
     try:
-        spinner_msg = "Running analysis (extended thinking enabled)..." if extended_thinking else "Running analysis..."
-        with st.spinner(spinner_msg):
-            result = analyse_structured(client, answers, extended_thinking=extended_thinking)
-    except PipelineError as e:
-        st.error(str(e))
-        st.stop()
+        # Upload context file if provided — get file_id to pass to analyser
+        if uploaded_file is not None:
+            try:
+                with st.spinner(f"Uploading {uploaded_file.name}..."):
+                    uf = upload_context_file(client, uploaded_file.getvalue(), uploaded_file.name)
+                    context_file_id = uf.file_id
+            except ValueError as e:
+                st.error(str(e))
+                st.stop()
+
+            # Relevance check — warn if document unlikely to help pattern analysis
+            with st.spinner("Checking document relevance..."):
+                relevance_warnings = validate_context_file(client, context_file_id)
+            for warning in relevance_warnings:
+                st.warning(warning)
+
+        # Pre-processing — deterministic checks, no Claude calls
+        pre = pre_process(answers, has_context_file=context_file_id is not None)
+        if pre.warnings:
+            for warning in pre.warnings:
+                st.warning(warning)
+        if pre.blocked:
+            for error in pre.errors:
+                st.error(error)
+            st.stop()
+
+        # Validation
+        with st.spinner("Checking input quality..."):
+            errors = validate_answers(client, answers)
+
+        if errors:
+            for error in errors:
+                st.warning(error)
+            st.info("Please revisit your answers and try again.")
+            st.stop()
+
+        st.divider()
+        st.subheader("Pattern Analysis")
+
+        try:
+            spinner_msg = "Running analysis (extended thinking enabled)..." if extended_thinking else "Running analysis..."
+            with st.spinner(spinner_msg):
+                result = analyse_structured(
+                    client,
+                    answers,
+                    extended_thinking=extended_thinking,
+                    context_file_id=context_file_id,
+                )
+        except PipelineError as e:
+            st.error(str(e))
+            st.stop()
+
+    finally:
+        # Always delete the uploaded file — runs even when st.stop() is called
+        if context_file_id:
+            delete_file(client, context_file_id)
 
     if not result.data:
         st.error("The analysis came back empty. Please try again.")

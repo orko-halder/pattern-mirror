@@ -6,7 +6,7 @@ Runs as a post-analysis quality check using Haiku.
 """
 
 from anthropic import Anthropic
-from prompts import EVALUATOR_TOOL
+from prompts import EVALUATOR_TOOL, EVALUATOR_SYSTEM_PROMPT
 from config import HAIKU_MODEL, MAX_TOKENS_EVALUATE
 
 
@@ -15,15 +15,7 @@ def evaluate_output(client: Anthropic, analysis_output: str) -> None:
     response = client.messages.create(
         model=HAIKU_MODEL,
         max_tokens=MAX_TOKENS_EVALUATE,
-        system=(
-            "You are a quality evaluator for a human psychological pattern analysis tool. "
-            "Score the analysis on two dimensions, each from 1 to 10.\n\n"
-            "PATTERN ACCURACY (1-10): Did it identify a specific, precise pattern — or a vague generalisation?\n"
-            "1 = generic and could apply to anyone. 10 = precise, specific, clearly grounded in the answers.\n\n"
-            "PROTOCOL DEPLOYABILITY (1-10): Is the protocol concrete enough to use tomorrow morning?\n"
-            "1 = generic advice. 10 = specific steps deployable in a real moment of pattern activation.\n\n"
-            "Call the quality_evaluation tool with your scores and reasoning."
-        ),
+        system=EVALUATOR_SYSTEM_PROMPT,
         tools=[EVALUATOR_TOOL],
         tool_choice={"type": "tool", "name": "quality_evaluation"},
         messages=[{"role": "user", "content": analysis_output}],
