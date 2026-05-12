@@ -17,7 +17,7 @@ from validator import format_answers
 from tools import LOOKUP_FRAMEWORK_TOOL, WEB_SEARCH_TOOL, handle_tool_call
 from classifier import classify_readiness, log_profile
 from file_context import build_document_block
-from config import SONNET_MODEL, THINKING_BUDGET, MAX_TOKENS_ANALYSE, MAX_TOKENS_ANALYSE_SHORT, MAX_TOOL_ITERATIONS
+from config import SONNET_MODEL, THINKING_BUDGET, MAX_TOKENS_ANALYSE, MAX_TOKENS_ANALYSE_SHORT, MAX_TOOL_ITERATIONS, PROMPT_CACHING_BETA
 
 
 class PipelineError(Exception):
@@ -59,27 +59,52 @@ def analyse_structured(
     # Classify readiness — profile shapes delivery mode
     profile = classify_readiness(client, answers)
     log_profile(profile)
-    system_prompt = build_system_prompt(profile["delivery_mode"])
+
+    # Wrap system prompt as a content block with cache_control.
+    # The system prompt (~2000 tokens) is identical across all calls in the tool use loop.
+    # Marking it ephemeral caches it on call 1; calls 2 and 3 read from cache at 0.10× cost.
+    system = [{
+        "type": "text",
+        "text": build_system_prompt(profile["delivery_mode"]),
+        "cache_control": {"type": "ephemeral"},
+    }]
 
     user_text = format_answers(answers)
 
     # If a context file was uploaded, prepend it as a document block.
     # The beta header is required for all calls in the loop because the document
     # block lives in the first user message which is replayed on every turn.
+    # Combine betas: files API + prompt caching.
     if context_file_id:
         user_content = [build_document_block(context_file_id), {"type": "text", "text": user_text}]
-        _create = functools.partial(client.beta.messages.create, betas=["files-api-2025-04-14"])
+        _create = functools.partial(
+            client.beta.messages.create,
+            betas=[PROMPT_CACHING_BETA, "files-api-2025-04-14"],
+        )
     else:
         user_content = user_text
-        _create = client.messages.create
+        _create = functools.partial(
+            client.beta.messages.create,
+            betas=[PROMPT_CACHING_BETA],
+        )
 
     messages = [{"role": "user", "content": user_content}]
     tools = [LOOKUP_FRAMEWORK_TOOL, ANALYSIS_TOOL]
     if os.environ.get("TAVILY_API_KEY"):
         tools.insert(1, WEB_SEARCH_TOOL)
+
+    # Mark the last tool for caching — caches the entire tools prefix up to this point.
+    # Don't mutate the original dicts (module-level constants); build a new list.
+    tools = tools[:-1] + [{**tools[-1], "cache_control": {"type": "ephemeral"}}]
+
     citations = []
     force_final = False
-    total_usage = {"input_tokens": 0, "output_tokens": 0}
+    total_usage = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+    }
     max_tokens = max(MAX_TOKENS_ANALYSE, THINKING_BUDGET + 1000) if extended_thinking else MAX_TOKENS_ANALYSE_SHORT
 
     try:
@@ -95,7 +120,7 @@ def analyse_structured(
                 model=SONNET_MODEL,
                 max_tokens=max_tokens,
                 thinking=thinking_param,
-                system=system_prompt,
+                system=system,
                 tools=tools,
                 tool_choice={"type": "tool", "name": "pattern_analysis"} if force_final else {"type": "auto"},
                 messages=messages,
@@ -104,6 +129,8 @@ def analyse_structured(
             # Accumulate token usage across all calls in the loop
             total_usage["input_tokens"] += response.usage.input_tokens
             total_usage["output_tokens"] += response.usage.output_tokens
+            total_usage["cache_creation_input_tokens"] += getattr(response.usage, "cache_creation_input_tokens", 0) or 0
+            total_usage["cache_read_input_tokens"] += getattr(response.usage, "cache_read_input_tokens", 0) or 0
 
             # Truncation on the first call — fail cleanly rather than silently skipping tool enrichment
             if response.stop_reason == "max_tokens" and not force_final:

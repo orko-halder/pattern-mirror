@@ -27,5 +27,12 @@ MAX_TOKENS_EVALUATE = 500
 # Normal flow uses at most 3 iterations (1 tool call + 1 force_final + 1 retry).
 MAX_TOOL_ITERATIONS = 6
 
+# ── Prompt caching ───────────────────────────────────────────
+# Anthropic charges differently for cached vs uncached tokens.
+# Cache creation (first call): 1.25× normal input price — you're paying to write the cache.
+# Cache read (subsequent calls): 0.10× normal — the whole point.
+# Minimum cacheable block: 1024 tokens. Our system prompt + tools exceed this comfortably.
+PROMPT_CACHING_BETA = "prompt-caching-2024-07-31"
+
 # ── Types ─────────────────────────────────────────────────────
 DeliveryMode = Literal["direct", "paced", "gentle"]

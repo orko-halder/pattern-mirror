@@ -236,6 +236,8 @@ def pre_process(answers: list[dict], has_context_file: bool = False) -> PreCheck
 # Update when Anthropic changes pricing.
 _COST_PER_INPUT_TOKEN = 3.00 / 1_000_000
 _COST_PER_OUTPUT_TOKEN = 15.00 / 1_000_000
+_COST_PER_CACHE_CREATION_TOKEN = 3.75 / 1_000_000   # 1.25× input — writing to cache
+_COST_PER_CACHE_READ_TOKEN = 0.30 / 1_000_000        # 0.10× input — reading from cache
 
 
 def log_cost(usage: dict, model: str = "") -> str:
@@ -243,15 +245,29 @@ def log_cost(usage: dict, model: str = "") -> str:
 
     Returns a formatted summary string — also prints to console.
     usage dict must have keys: input_tokens, output_tokens.
+    Optional cache keys: cache_creation_input_tokens, cache_read_input_tokens.
     """
     input_tokens = usage.get("input_tokens", 0)
     output_tokens = usage.get("output_tokens", 0)
-    cost = (input_tokens * _COST_PER_INPUT_TOKEN) + (output_tokens * _COST_PER_OUTPUT_TOKEN)
+    cache_creation = usage.get("cache_creation_input_tokens", 0)
+    cache_read = usage.get("cache_read_input_tokens", 0)
+
+    cost = (
+        (input_tokens * _COST_PER_INPUT_TOKEN)
+        + (output_tokens * _COST_PER_OUTPUT_TOKEN)
+        + (cache_creation * _COST_PER_CACHE_CREATION_TOKEN)
+        + (cache_read * _COST_PER_CACHE_READ_TOKEN)
+    )
 
     model_tag = f" ({model})" if model else ""
+    cache_note = (
+        f" | cache write: {cache_creation:,} / read: {cache_read:,}"
+        if cache_creation or cache_read
+        else ""
+    )
     summary = (
         f"📊 Usage{model_tag} — "
-        f"in: {input_tokens:,} | out: {output_tokens:,} | "
+        f"in: {input_tokens:,} | out: {output_tokens:,}{cache_note} | "
         f"est. cost: ${cost:.4f}"
     )
     print(summary)
