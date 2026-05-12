@@ -32,6 +32,9 @@ dist/
 /.cache/
 *.log
 
+# RAG — ChromaDB index (rebuilt automatically on first run)
+/chroma_db/
+
 # Jupyter
 .ipynb_checkpoints/
 

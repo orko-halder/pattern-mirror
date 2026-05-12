@@ -14,11 +14,9 @@ register it in handle_tool_call.
 """
 
 import os
-import json
-from pathlib import Path
 from tavily import TavilyClient
 
-FRAMEWORKS_PATH = Path(__file__).parent / "frameworks.json"
+import rag
 
 
 # ── Envelope builder ─────────────────────────────────────────
@@ -30,23 +28,18 @@ def _err(content: str) -> dict:
 
 
 # ── Handlers ─────────────────────────────────────────────────
-def handle_lookup_framework(framework_key: str) -> dict:
-    """Look up a psychological framework by key."""
-    with open(FRAMEWORKS_PATH) as f:
-        frameworks = json.load(f)
+def handle_lookup_framework(query: str) -> dict:
+    """Semantic search for the most relevant psychological framework(s)."""
+    try:
+        matches = rag.search_frameworks(query, n_results=2)
+    except Exception as e:
+        return _err(f"Framework search failed: {str(e)}")
 
-    if framework_key not in frameworks:
-        available = ", ".join(frameworks.keys())
-        return _err(f"Framework '{framework_key}' not found. Available: {available}")
+    if not matches:
+        return _err("No matching frameworks found.")
 
-    fw = frameworks[framework_key]
-    content = (
-        f"Framework: {fw['name']} ({fw['tradition']})\n"
-        f"Description: {fw['description']}\n"
-        f"Protocol note: {fw['protocol_note']}\n"
-        f"Pattern tags: {', '.join(fw['pattern_tags'])}"
-    )
-    return _ok(content, framework_name=fw["name"], tradition=fw["tradition"])
+    parts = [f"Match {i}:\n{m['content']}" for i, m in enumerate(matches, 1)]
+    return _ok("\n\n---\n\n".join(parts))
 
 
 ALLOWED_DOMAINS = [
@@ -97,10 +90,10 @@ def handle_web_search(query: str) -> dict:
 def handle_tool_call(tool_name: str, tool_input: dict) -> dict:
     """Route a tool call to the correct handler. Always returns a standard envelope."""
     if tool_name == "lookup_framework":
-        key = tool_input.get("framework_key")
-        if not key:
-            return _err("Missing required input: framework_key")
-        return handle_lookup_framework(key)
+        query = tool_input.get("query")
+        if not query:
+            return _err("Missing required input: query")
+        return handle_lookup_framework(query)
     if tool_name == "web_search":
         query = tool_input.get("query")
         if not query:
@@ -113,26 +106,25 @@ def handle_tool_call(tool_name: str, tool_input: dict) -> dict:
 LOOKUP_FRAMEWORK_TOOL = {
     "name": "lookup_framework",
     "description": (
-        "Look up a psychological framework from the Pattern Mirror database. "
-        "Only call this when the pattern maps EXACTLY to one of the available keys — "
-        "do not call it for partial matches or related concepts. "
-        "If the specific named concept (e.g. rejection sensitive dysphoria, alexithymia, "
-        "C-PTSD emotional flashbacks) is not in the keys list, use web_search instead."
+        "Search the Pattern Mirror framework database for the most relevant psychological framework. "
+        "Describe the pattern in natural language — the search is semantic, not keyword-based. "
+        "Always call this before producing the final analysis to ground the pattern in established psychology. "
+        "Use web_search instead for specific named clinical conditions not covered by general frameworks "
+        "(e.g. rejection sensitive dysphoria, alexithymia, C-PTSD emotional flashbacks)."
     ),
     "input_schema": {
         "type": "object",
         "properties": {
-            "framework_key": {
+            "query": {
                 "type": "string",
                 "description": (
-                    "The framework key to look up. Available keys: "
-                    "jungian_shadow, attachment_anxious, attachment_avoidant, "
-                    "fawn_response, inner_critic, cognitive_distortion_catastrophising, "
-                    "core_belief_unworthiness, identity_foreclosure, hypervigilance"
+                    "A natural language description of the pattern you've identified — "
+                    "e.g. 'person avoids asking for help and prides themselves on self-sufficiency' "
+                    "or 'hypervigilant to social rejection, amplifies reassurance-seeking when uncertain'."
                 )
             }
         },
-        "required": ["framework_key"]
+        "required": ["query"]
     }
 }
 
@@ -141,7 +133,7 @@ WEB_SEARCH_TOOL = {
     "description": (
         "Search trusted psychology and mental health sources for information about "
         "a specific named clinical concept or condition. Use this when the pattern "
-        "involves a concept not in the lookup_framework keys list — for example: "
+        "involves a specific named condition not well-covered by general frameworks — for example: "
         "rejection sensitive dysphoria, alexithymia, C-PTSD emotional flashbacks, "
         "pathological demand avoidance, or other specific named conditions. "
         "Searches are restricted to: psychologytoday.com, apa.org, "

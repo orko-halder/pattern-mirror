@@ -18,9 +18,11 @@ validator.py     Input quality check (Haiku) — runs before analysis
 classifier.py    Readiness classifier (Haiku) — shapes delivery mode
 analyser.py      Main pipeline (Sonnet) — tool use loop, returns AnalysisResult
 prompts.py       All prompts, tool schemas, delivery variants — no logic here
-tools.py         Tool handlers + schemas — framework lookup, web search
+tools.py         Tool handlers + schemas — framework search, web search
+rag.py           RAG pipeline — ChromaDB + sentence-transformers, semantic framework search
 evaluator.py     Output quality scorer (Haiku) — runs after analysis
 frameworks.json  Local knowledge base of psychological frameworks
+chroma_db/       ChromaDB persistent index — gitignored, rebuilt automatically on first run
 ```
 
 **Flow:** `app.py` → `pre_process()` → `upload_context_file()` (optional) → `validate_answers()` → `classify_readiness()` → `analyse_structured()` → `post_process()` → `evaluate_output()`
@@ -81,8 +83,8 @@ frameworks.json  Local knowledge base of psychological frameworks
 ## Adding a New Framework
 
 1. Add an entry to `frameworks.json`
-2. Add the key to the `framework_key` description in `LOOKUP_FRAMEWORK_TOOL` in `tools.py`
-3. No other changes needed
+2. Delete `chroma_db/` so the index rebuilds on next run — or call `rag.build_index()` directly
+3. No other changes needed — semantic search picks up new entries automatically
 
 ## Adding a New Tool
 
