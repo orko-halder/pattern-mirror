@@ -9,14 +9,15 @@ from typing import Literal
 
 # ── Models ────────────────────────────────────────────────────
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
-SONNET_MODEL = "claude-sonnet-4-5"
+SONNET_MODEL = "claude-sonnet-4-6"
 
 # ── Token budgets ─────────────────────────────────────────────
-# NOTE: budget_tokens is deprecated on Sonnet 4.6+ / Opus 4.6+.
-# When upgrading, migrate to: thinking={"type": "adaptive"}, effort="medium|high"
-THINKING_BUDGET = 2000
+# Sonnet 4.6+ uses adaptive thinking — budget_tokens is gone.
+# effort controls how much thinking Claude does: "low" | "medium" | "high"
+# On 4.6+, max_tokens is output-only — thinking tokens are separate and not counted here.
+THINKING_EFFORT = "high"
 
-MAX_TOKENS_ANALYSE = 4000       # used when extended_thinking=True
+MAX_TOKENS_ANALYSE = 4000       # output tokens — used for both thinking and non-thinking calls
 MAX_TOKENS_ANALYSE_SHORT = 2048  # used when extended_thinking=False or on truncation retry
 MAX_TOKENS_VALIDATE = 300
 MAX_TOKENS_CLASSIFY = 512

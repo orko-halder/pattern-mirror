@@ -17,7 +17,7 @@ from validator import format_answers
 from tools import LOOKUP_FRAMEWORK_TOOL, WEB_SEARCH_TOOL, handle_tool_call
 from classifier import classify_readiness, log_profile
 from file_context import build_document_block
-from config import SONNET_MODEL, THINKING_BUDGET, MAX_TOKENS_ANALYSE, MAX_TOKENS_ANALYSE_SHORT, MAX_TOOL_ITERATIONS, PROMPT_CACHING_BETA
+from config import SONNET_MODEL, THINKING_EFFORT, MAX_TOKENS_ANALYSE, MAX_TOKENS_ANALYSE_SHORT, MAX_TOOL_ITERATIONS, PROMPT_CACHING_BETA
 
 
 class PipelineError(Exception):
@@ -105,18 +105,18 @@ def analyse_structured(
         "cache_creation_input_tokens": 0,
         "cache_read_input_tokens": 0,
     }
-    max_tokens = max(MAX_TOKENS_ANALYSE, THINKING_BUDGET + 1000) if extended_thinking else MAX_TOKENS_ANALYSE_SHORT
+    # On Sonnet 4.6+, max_tokens is output-only — thinking tokens are separate.
+    # No need to inflate max_tokens to accommodate a thinking budget.
+    max_tokens = MAX_TOKENS_ANALYSE if extended_thinking else MAX_TOKENS_ANALYSE_SHORT
 
     try:
         for _iteration in range(MAX_TOOL_ITERATIONS):
-            # Extended thinking only on the first call — not when forcing pattern_analysis
-            thinking_param = (
-                {"type": "enabled", "budget_tokens": THINKING_BUDGET}
-                if extended_thinking and not force_final
-                else {"type": "disabled"}
-            )
+            # Extended thinking only on the first call — adaptive thinking + forced tool_choice
+            # has constraints, so disable when force_final=True.
+            use_thinking = extended_thinking and not force_final
+            thinking_param = {"type": "adaptive"} if use_thinking else {"type": "disabled"}
 
-            response = _create(
+            call_kwargs = dict(
                 model=SONNET_MODEL,
                 max_tokens=max_tokens,
                 thinking=thinking_param,
@@ -125,6 +125,10 @@ def analyse_structured(
                 tool_choice={"type": "tool", "name": "pattern_analysis"} if force_final else {"type": "auto"},
                 messages=messages,
             )
+            if use_thinking:
+                call_kwargs["effort"] = THINKING_EFFORT
+
+            response = _create(**call_kwargs)
 
             # Accumulate token usage across all calls in the loop
             total_usage["input_tokens"] += response.usage.input_tokens
