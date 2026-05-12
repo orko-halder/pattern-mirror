@@ -48,7 +48,7 @@ frameworks.json  Local knowledge base of psychological frameworks
 
 **`classifier.py`** — Claude classifies `self_awareness` and `fragility_risk`. Python derives `delivery_mode` deterministically in `derive_delivery_mode()`. Do not ask Claude to derive the delivery mode — it's inconsistent at boundaries.
 
-**`analyser.py`** — the tool use loop. `force_final=True` after the first tool call forces `pattern_analysis`. Extended thinking is enabled on the first call only, disabled when `force_final=True`. Truncation is handled via retry — messages are never modified, only `max_tokens` changes.
+**`analyser.py`** — the tool use loop. `force_final=True` after the first tool call forces `pattern_analysis`. Extended thinking is enabled on the first call only, disabled when `force_final=True`. Truncation is handled via retry — messages are never modified, only `max_tokens` changes. Prompt caching is always active — system prompt and tools are marked with `cache_control: ephemeral` so calls 2 and 3 in the loop read from cache at 0.10× cost.
 
 ---
 
@@ -73,6 +73,8 @@ frameworks.json  Local knowledge base of psychological frameworks
 - **`extended_thinking` on `claude-sonnet-4-5` requires `thinking.type: "enabled"` + `budget_tokens`.** When upgrading to Sonnet 4.6+, migrate to `thinking.type: "adaptive"` + `effort`.
 - **Files API requires `client.beta.messages.create` with `betas=["files-api-2025-04-14"]`.** When `context_file_id` is set, `analyser.py` uses this for all calls in the loop — the document block lives in the first user message which is replayed every turn.
 - **Context files must be deleted after use.** `app.py` wraps the full pipeline in `try/finally` to ensure `delete_file()` is always called, even when `st.stop()` is raised mid-pipeline.
+- **Prompt caching requires `betas=["prompt-caching-2024-07-31"]`.** Both paths in `analyser.py` (with and without Files API) use `client.beta.messages.create`. When Files API is also active, both betas are passed: `[PROMPT_CACHING_BETA, "files-api-2025-04-14"]`. The system prompt is passed as a list (not a string) with `cache_control: ephemeral` on the text block. Tool schemas are cached by marking the last tool in the list — never mutate the original constants, build a new list.
+- **Minimum cacheable block is 1024 tokens.** The system prompt + tools in Pattern Mirror comfortably exceed this. Don't add `cache_control` to short prompts — it has no effect and adds noise.
 
 ---
 

@@ -11,7 +11,7 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from prompts import QUESTIONS
-from validator import validate_answers, validate_context_file
+from validator import validate_answers, validate_context_file, count_tokens_preflight
 from analyser import analyse_structured, PipelineError
 from middleware import pre_process, post_process
 from file_context import upload_context_file, delete_file
@@ -134,6 +134,9 @@ if run:
             st.info("Please revisit your answers and try again.")
             st.stop()
 
+        # Accurate preflight token count — no inference, just counting
+        preflight_tokens = count_tokens_preflight(client, answers)
+
         st.divider()
         st.subheader("Pattern Analysis")
 
@@ -165,6 +168,7 @@ if run:
         for warning in post.warnings:
             st.warning(warning)
     with st.expander("📊 Token usage", expanded=False):
+        st.caption(f"Preflight count (before analysis): {preflight_tokens:,} input tokens")
         st.caption(post.cost_summary)
 
     # Core pattern

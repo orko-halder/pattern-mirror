@@ -10,12 +10,13 @@ Also provides validate_context_file() — a Haiku relevance check for uploaded d
 from anthropic import Anthropic
 from prompts import (
     QUESTIONS,
+    SYSTEM_PROMPT,
     VALIDATOR_TOOL,
     VALIDATOR_SYSTEM_PROMPT,
     CONTEXT_RELEVANCE_TOOL,
     CONTEXT_RELEVANCE_SYSTEM_PROMPT,
 )
-from config import HAIKU_MODEL, MAX_TOKENS_VALIDATE
+from config import HAIKU_MODEL, MAX_TOKENS_VALIDATE, SONNET_MODEL
 
 
 def format_answers(answers: list[dict]) -> str:
@@ -119,3 +120,24 @@ def validate_context_file(client: Anthropic, file_id: str) -> list[str]:
 
     # Fallback: tool call not found — treat as relevant, don't block
     return []
+
+
+def count_tokens_preflight(client: Anthropic, answers: list[dict]) -> int:
+    """Get an accurate token count via the API before running analysis.
+
+    Uses client.messages.count_tokens() — no model inference, no cost beyond the
+    count call itself. Returns the exact input token count Anthropic would charge for.
+
+    Called after validate_answers() passes — not a gate, just a display figure
+    shown to the user before the expensive Sonnet call runs.
+
+    Uses SYSTEM_PROMPT (base, no delivery mode) as an approximation — the actual
+    call uses a delivery-mode-appended version, so the real count will be slightly
+    higher. Close enough for display purposes.
+    """
+    result = client.messages.count_tokens(
+        model=SONNET_MODEL,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": format_answers(answers)}],
+    )
+    return result.input_tokens

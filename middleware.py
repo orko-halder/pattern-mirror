@@ -51,6 +51,7 @@ def estimate_tokens(answers: list[dict]) -> int:
 
     Uses chars/4 heuristic. Includes fixed overhead for system prompt and tool schemas.
     This is intentionally an overestimate — better to warn early than to hit API limits.
+    No API call — used inside pre_process() as a fast deterministic gate.
     """
     answer_chars = sum(len(a.get("answer", "")) for a in answers)
     answer_tokens = answer_chars // 4
