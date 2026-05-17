@@ -38,6 +38,7 @@ def analyse_structured(
     answers: list[dict],
     extended_thinking: bool = False,
     context_file_id: Optional[str] = None,
+    followup_answers: Optional[list[dict]] = None,
 ) -> AnalysisResult:
     """Send answers to Claude, get back structured JSON.
     Returns AnalysisResult(data, text, citations).
@@ -55,6 +56,10 @@ def analyse_structured(
     When provided, the file is prepended as a document block in the user message.
     Uses client.beta.messages.create with the files-api beta header for all calls
     in the loop (the first message retains the document block throughout).
+
+    followup_answers: optional list of follow-up Q&A dicts (each has 'question' and 'answer').
+    When provided, format_answers() splits the XML into <initial_answers> and
+    <validation_answers> so Claude can see both phases together.
     """
     # Classify readiness — profile shapes delivery mode
     profile = classify_readiness(client, answers)
@@ -69,7 +74,7 @@ def analyse_structured(
         "cache_control": {"type": "ephemeral"},
     }]
 
-    user_text = format_answers(answers)
+    user_text = format_answers(answers, followup_answers)
 
     # If a context file was uploaded, prepend it as a document block.
     # The beta header is required for all calls in the loop because the document

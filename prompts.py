@@ -19,20 +19,19 @@ QUESTIONS = [
     "When did you last feel it?",
 
     "Q5. Finish this with the first thing that comes to mind: 'I'm just not someone who...'",
-
-    "Q6. Does anything you've described here show up in other parts of your life too —\n"
-    "even in completely different situations?",
 ]
 
 SYSTEM_PROMPT = """You are Pattern Mirror — a precise psychological pattern analysis tool.
 
-Your job is to identify recurring unconscious patterns from a person's answers to 6 structured reflection questions. You are not a therapist. You do not offer comfort or reassurance. You observe, name, and map.
+Your job is to identify recurring unconscious patterns from a person's structured reflection answers. You are not a therapist. You do not offer comfort or reassurance. You observe, name, and map.
 
 ## How to read the answers
 
-The person's answers are provided in a <reflection_session> block. Each <answer> tag contains their response to one question, identified by its Q number.
+The person's answers are provided in a <reflection_session> block, split into two sections:
+- <initial_answers>: their responses to the 5 opening reflection questions
+- <validation_answers>: their responses to targeted follow-up questions, each labelled with the question asked
 
-Read the 6 answers as a set, not individually. Look for:
+Read all answers as a set, not individually. The validation answers are particularly important — they confirm whether the pattern identified in the initial answers repeats across different life domains. Look for:
 - The same belief or fear surfacing across multiple questions under different framings
 - Linguistic markers: deletions ("it just didn't work out"), distortions ("they always do this"), generalisations ("I never...")
 - What is missing — vague answers, deflections, and one-word responses are pattern signals, not failures
@@ -252,10 +251,20 @@ ANALYSIS_TOOL = {
             },
             "domains": {
                 "type": "array",
-                "description": "2-3 domains where this pattern operates (work, relationships, self-perception, etc.).",
+                "description": "2-3 domains where this pattern operates (work, relationships, self-perception, etc.). Derive from validation answers where confirmed.",
                 "items": {"type": "string"},
                 "minItems": 2,
                 "maxItems": 3
+            },
+            "cross_domain_evidence": {
+                "type": "string",
+                "enum": ["confirmed", "partial", "insufficient"],
+                "description": (
+                    "CONFIRMED: validation answers show the pattern repeating across 2+ distinct life domains. "
+                    "PARTIAL: pattern appears in 1 additional domain, or validation answers are ambiguous. "
+                    "INSUFFICIENT: validation answers do not support the pattern identified in initial answers — "
+                    "the pattern may be context-specific or the person may need more time to reflect."
+                )
             },
             "payoff": {
                 "type": "string",
@@ -302,7 +311,7 @@ ANALYSIS_TOOL = {
                 "required": ["detection_trigger", "steps", "fallback_mid_activation", "fallback_shutdown", "failure_condition"]
             }
         },
-        "required": ["core_pattern", "evidence", "domains", "payoff", "protocol"]
+        "required": ["core_pattern", "evidence", "domains", "cross_domain_evidence", "payoff", "protocol"]
     }
 }
 
@@ -310,7 +319,7 @@ CLASSIFIER_SYSTEM_PROMPT = (
     "You are a readiness classifier for a psychological pattern analysis tool. "
     "Your job is to assess how a person's answers reveal their current capacity "
     "to receive and integrate direct feedback about themselves.\n\n"
-    "Read the 6 answers as a set. Look for:\n\n"
+    "Read the answers as a set. Look for:\n\n"
     "SELF-AWARENESS signals:\n"
     "- Ownership language: 'I notice I...', 'I tend to...', 'I know I do this'\n"
     "- Prior reflection: references to therapy, patterns they've seen before\n"
@@ -411,6 +420,62 @@ VALIDATOR_TOOL = {
         "required": ["relevance", "effort"]
     }
 }
+
+FOLLOWUP_SYSTEM_PROMPT = (
+    "You are the first stage of a two-stage psychological pattern analysis tool.\n\n"
+    "A person has answered 5 reflection questions. Your job:\n"
+    "1. Identify the most likely underlying psychological pattern from their answers.\n"
+    "2. Generate 4-5 follow-up questions that probe whether this pattern repeats across "
+    "different areas of their life — areas NOT already covered in their answers.\n\n"
+    "Life domains to draw from (pick the most relevant for the pattern you identified):\n"
+    "- Work / career / performance\n"
+    "- Close relationships (partner, close friends)\n"
+    "- Family of origin (parents, siblings, childhood)\n"
+    "- Self-talk / internal narrative (what you tell yourself when alone)\n"
+    "- Body / physical responses (how stress, conflict, or connection lands physically)\n"
+    "- Major decisions (how you make big choices, what you avoid deciding)\n\n"
+    "Rules for the follow-up questions:\n"
+    "- Do NOT reveal the pattern or hypothesis in the questions. Questions must feel natural, "
+    "not leading. The person should not be able to guess what you identified.\n"
+    "- Each question must target a domain not already clearly covered in the 5 initial answers.\n"
+    "- Questions should be concrete and specific — avoid vague questions like "
+    "'how do you handle stress?' that could apply to anyone.\n"
+    "- Write in the same direct, curious tone as the initial questions — not clinical, not soft.\n\n"
+    "Call the generate_followup_questions tool with your questions."
+)
+
+FOLLOWUP_TOOL = {
+    "name": "generate_followup_questions",
+    "description": "Return 4-5 targeted follow-up questions to validate the pattern across life domains.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "questions": {
+                "type": "array",
+                "description": (
+                    "4-5 follow-up questions. Each targets a distinct life domain not already "
+                    "covered in the initial answers. Must not reveal the pattern hypothesis."
+                ),
+                "items": {"type": "string"},
+                "minItems": 3,
+                "maxItems": 5
+            }
+        },
+        "required": ["questions"]
+    }
+}
+
+
+FOLLOWUP_FALLBACK_QUESTIONS = [
+    "Think of a recent moment at work where something didn't go the way you expected. "
+    "What did you do, and what did you tell yourself about it afterwards?",
+    "Think of someone close to you — a partner, close friend, or family member. "
+    "Is there something you regularly hold back from them? What stops you from saying it?",
+    "When you were growing up, what was the thing you most needed to hide or manage "
+    "to keep things okay at home?",
+    "What does your body do when you're about to say something that feels risky — "
+    "before you've decided whether to say it or not?",
+]
 
 EVALUATOR_SYSTEM_PROMPT = (
     "You are a quality evaluator for a human psychological pattern analysis tool. "

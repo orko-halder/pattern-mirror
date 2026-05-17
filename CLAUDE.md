@@ -2,7 +2,7 @@
 
 ## What This Project Is
 
-A psychological pattern analysis tool. Users answer 6 structured reflection questions. The system identifies unconscious recurring patterns and returns a structured analysis with a deployable protocol.
+A psychological pattern analysis tool. Users answer 5 structured reflection questions, then respond to 4-5 dynamically generated follow-up questions that probe whether the identified pattern repeats across life domains. The system identifies unconscious recurring patterns and returns a structured analysis with a deployable protocol.
 
 This is also a learning project for the Claude Certified Architect exam. Every module demonstrates a specific Claude API concept.
 
@@ -11,10 +11,11 @@ This is also a learning project for the Claude Certified Architect exam. Every m
 ## Architecture
 
 ```
-app.py           Streamlit UI — gatekeeper, renders results
+app.py           Streamlit UI — 3-stage flow (initial → followup → results)
 middleware.py    Pre/post processing — token estimate, crisis check, PII, cost log, safety filter
 file_context.py  Files API — upload/delete context documents, build document blocks
-validator.py     Input quality check (Haiku) — runs before analysis
+validator.py     Input quality check (Haiku) — runs before analysis; format_answers()
+followup.py      Follow-up question generator (Haiku) — stage 1 of two-stage pipeline
 classifier.py    Readiness classifier (Haiku) — shapes delivery mode
 analyser.py      Main pipeline (Sonnet) — tool use loop, returns AnalysisResult
 prompts.py       All prompts, tool schemas, delivery variants — no logic here
@@ -25,7 +26,11 @@ frameworks.json  Local knowledge base of psychological frameworks
 chroma_db/       ChromaDB persistent index — gitignored, rebuilt automatically on first run
 ```
 
-**Flow:** `app.py` → `pre_process()` → `upload_context_file()` (optional) → `validate_answers()` → `classify_readiness()` → `analyse_structured()` → `post_process()` → `evaluate_output()`
+**Flow (stage 1 — initial answers):**
+`app.py` → `pre_process()` → `upload_context_file()` (optional) → `validate_answers()` → `generate_followups()` → advance to stage 2
+
+**Flow (stage 2 — follow-up answers):**
+`app.py` → `classify_readiness()` → `analyse_structured(followup_answers=...)` → `post_process()` → render results
 
 ---
 
@@ -50,7 +55,9 @@ chroma_db/       ChromaDB persistent index — gitignored, rebuilt automatically
 
 **`classifier.py`** — Claude classifies `self_awareness` and `fragility_risk`. Python derives `delivery_mode` deterministically in `derive_delivery_mode()`. Do not ask Claude to derive the delivery mode — it's inconsistent at boundaries.
 
-**`analyser.py`** — the tool use loop. `force_final=True` after the first tool call forces `pattern_analysis`. Extended thinking is enabled on the first call only, disabled when `force_final=True`. Truncation is handled via retry — messages are never modified, only `max_tokens` changes. Prompt caching is always active — system prompt and tools are marked with `cache_control: ephemeral` so calls 2 and 3 in the loop read from cache at 0.10× cost.
+**`followup.py`** — Haiku follow-up generator. `generate_followups(client, initial_answers) → list[str]`. Uses forced tool_choice (`generate_followup_questions`). Returns 4-5 cross-domain questions; Claude's internal pattern hypothesis is never surfaced to the user. Falls back to 4 hardcoded broad questions on any API failure — pipeline must not block on follow-up generation failure.
+
+**`analyser.py`** — the tool use loop. `force_final=True` after the first tool call forces `pattern_analysis`. Extended thinking is enabled on the first call only, disabled when `force_final=True`. Truncation is handled via retry — messages are never modified, only `max_tokens` changes. Prompt caching is always active — system prompt and tools are marked with `cache_control: ephemeral` so calls 2 and 3 in the loop read from cache at 0.10× cost. Accepts optional `followup_answers` — when provided, passes both answer sets to `format_answers()` which splits them into `<initial_answers>` and `<validation_answers>` XML blocks.
 
 ---
 
@@ -59,8 +66,9 @@ chroma_db/       ChromaDB persistent index — gitignored, rebuilt automatically
 | Component | Model | Why |
 |---|---|---|
 | `validate_answers` | `claude-haiku-4-5-20251001` | Binary check — fast, cheap |
+| `generate_followups` | `claude-haiku-4-5-20251001` | Pattern hypothesis + question generation — upgrade to Sonnet if quality is insufficient |
 | `classify_readiness` | `claude-haiku-4-5-20251001` | Pattern matching — upgrade to Sonnet when ready |
-| `analyse_structured` | `claude-sonnet-4-5` | Core product — quality matters |
+| `analyse_structured` | `claude-sonnet-4-6` | Core product — quality matters |
 | `evaluate_output` | `claude-haiku-4-5-20251001` | Rubric scoring — mechanical task |
 
 ---
@@ -77,6 +85,9 @@ chroma_db/       ChromaDB persistent index — gitignored, rebuilt automatically
 - **Context files must be deleted after use.** `app.py` wraps the full pipeline in `try/finally` to ensure `delete_file()` is always called, even when `st.stop()` is raised mid-pipeline.
 - **Prompt caching requires `betas=["prompt-caching-2024-07-31"]`.** Both paths in `analyser.py` (with and without Files API) use `client.beta.messages.create`. When Files API is also active, both betas are passed: `[PROMPT_CACHING_BETA, "files-api-2025-04-14"]`. The system prompt is passed as a list (not a string) with `cache_control: ephemeral` on the text block. Tool schemas are cached by marking the last tool in the list — never mutate the original constants, build a new list.
 - **Minimum cacheable block is 1024 tokens.** The system prompt + tools in Pattern Mirror comfortably exceed this. Don't add `cache_control` to short prompts — it has no effect and adds noise.
+- **`generate_followups()` never blocks the pipeline.** Any exception falls back to 4 hardcoded cross-domain questions. The stage always advances.
+- **`cross_domain_evidence` drives the results decision in app.py.** `"confirmed"` → show analysis; `"partial"` → show analysis with a caveat warning; `"insufficient"` → honest message + reset, no analysis shown. Never silently degrade.
+- **Follow-up questions must not reveal the hypothesis.** They probe domains (work, relationships, family of origin, self-talk, body, decisions) without naming the pattern. This is enforced in `FOLLOWUP_SYSTEM_PROMPT`.
 
 ---
 

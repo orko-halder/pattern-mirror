@@ -7,6 +7,7 @@ Two checks: relevance (answers respond to their questions) and effort (genuine e
 Also provides validate_context_file() — a Haiku relevance check for uploaded documents.
 """
 
+from typing import Optional
 from anthropic import Anthropic
 from prompts import (
     QUESTIONS,
@@ -19,11 +20,37 @@ from prompts import (
 from config import HAIKU_MODEL, MAX_TOKENS_VALIDATE, SONNET_MODEL
 
 
-def format_answers(answers: list[dict]) -> str:
-    """Format answers into XML-tagged block for the prompt."""
+def format_answers(
+    answers: list[dict],
+    followup_answers: Optional[list[dict]] = None,
+) -> str:
+    """Format answers into XML-tagged block for the prompt.
+
+    Without followup_answers: flat <reflection_session> block — used for
+    validation, token counting, and follow-up generation.
+
+    With followup_answers: splits into <initial_answers> and <validation_answers>.
+    Each follow-up item must have 'question' (the text) and 'answer' keys.
+    """
+    if followup_answers is None:
+        formatted = "<reflection_session>\n"
+        for item in answers:
+            formatted += f"  <answer id=\"{item['question']}\">{item['answer']}</answer>\n"
+        formatted += "</reflection_session>"
+        return formatted
+
     formatted = "<reflection_session>\n"
+    formatted += "  <initial_answers>\n"
     for item in answers:
-        formatted += f"  <answer id=\"{item['question']}\">{item['answer']}</answer>\n"
+        formatted += f"    <answer id=\"{item['question']}\">{item['answer']}</answer>\n"
+    formatted += "  </initial_answers>\n"
+    formatted += "  <validation_answers>\n"
+    for i, item in enumerate(followup_answers, 1):
+        formatted += (
+            f"    <answer id=\"F{i}\" question=\"{item['question']}\">"
+            f"{item['answer']}</answer>\n"
+        )
+    formatted += "  </validation_answers>\n"
     formatted += "</reflection_session>"
     return formatted
 
