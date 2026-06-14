@@ -11,19 +11,24 @@ This is also a learning project for the Claude Certified Architect exam. Every m
 ## Architecture
 
 ```
-app.py           Streamlit UI — 3-stage flow (initial → followup → results)
-middleware.py    Pre/post processing — token estimate, crisis check, PII, cost log, safety filter
-file_context.py  Files API — upload/delete context documents, build document blocks
-validator.py     Input quality check (Haiku) — runs before analysis; format_answers()
-followup.py      Follow-up question generator (Haiku) — stage 1 of two-stage pipeline
-classifier.py    Readiness classifier (Haiku) — shapes delivery mode
-analyser.py      Main pipeline (Sonnet) — tool use loop, returns AnalysisResult
-prompts.py       All prompts, tool schemas, delivery variants — no logic here
-tools.py         Tool handlers + schemas — framework search, web search
-rag.py           RAG pipeline — ChromaDB + sentence-transformers, semantic framework search
-evaluator.py     Output quality scorer (Haiku) — runs after analysis
-frameworks.json  Local knowledge base of psychological frameworks
-chroma_db/       ChromaDB persistent index — gitignored, rebuilt automatically on first run
+app.py                Streamlit UI — 3-stage flow (initial → followup → results)
+middleware.py         Pre/post processing — token estimate, crisis check, PII, cost log, safety filter
+file_context.py       Files API — upload/delete context documents, build document blocks
+validator.py          Input quality check (Haiku) — runs before analysis; format_answers()
+followup.py           Follow-up question generator (Haiku) — stage 1 of two-stage pipeline
+classifier.py         Readiness classifier (Haiku) — shapes delivery mode
+analyser.py           Main pipeline (Sonnet) — tool use loop, returns AnalysisResult
+prompts.py            All prompts, tool schemas, delivery variants — no logic here
+tools.py              Tool handlers + schemas — framework search, web search
+rag.py                RAG pipeline — ChromaDB + sentence-transformers, semantic framework search
+evaluator.py          Output quality scorer (Haiku) — runs after analysis
+frameworks.json       Local knowledge base of psychological frameworks
+chroma_db/            ChromaDB persistent index — gitignored, rebuilt automatically on first run
+
+mcp_server.py         MCP server — exposes analyse_reflection as a tool over stdio transport
+practice_mcp_server.py  Practice MCP server — word_count + reading_time tools (learning exercise)
+test_mcp_server.py    Test client for Pattern Mirror MCP server
+test_mcp_client.py    Test client for practice MCP server
 ```
 
 **Flow (stage 1 — initial answers):**
@@ -61,6 +66,34 @@ chroma_db/       ChromaDB persistent index — gitignored, rebuilt automatically
 
 ---
 
+## MCP Interface
+
+**`mcp_server.py`** — Pattern Mirror MCP server. Exposes the full analysis pipeline as a single MCP tool over stdio transport. Spawned as a subprocess by any MCP-compatible client (Claude Code, Claude Desktop, custom apps).
+
+- Tool exposed: `analyse_reflection(answers: list[str], extended_thinking: bool = false)`
+- Requires exactly 5 answers. Returns plain-text analysis formatted for terminal rendering.
+- Creates `_client = Anthropic(...)` once at module startup — not per-request.
+- Runs the same pipeline as `app.py`: `pre_process → validate_answers → generate_followups → analyse_structured → post_process → _format_result`.
+- **Single-shot design**: follow-up questions are generated internally but answers are not collected. Analysis runs on the initial 5 answers only. Interactive follow-up is a v2 feature — the round-trip doesn't map cleanly to a single tool call.
+- `_format_result()` renders the result as clean plain text (ASCII separators, no markdown symbols) — suitable for terminal display.
+
+**`practice_mcp_server.py`** — Standalone learning exercise. Two tools: `word_count` and `reading_time`. No Claude calls, no pipeline imports. Demonstrates the core MCP server pattern (`Server` → `@list_tools()` → `@call_tool()` → `stdio_server`) before connecting to a real pipeline.
+
+**`test_mcp_server.py`** — Integration test for Pattern Mirror MCP. Spawns `mcp_server.py` as a subprocess, performs the MCP handshake, calls `analyse_reflection` with 5 sample answers keyed to the actual QUESTIONS from `prompts.py`, prints the full result. Run with `python test_mcp_server.py`.
+
+**`test_mcp_client.py`** — Integration test for the practice server. Spawns `practice_mcp_server.py`, calls `word_count` and `reading_time`. Run with `python test_mcp_client.py`.
+
+**MCP transport pattern:**
+```
+MCP client (test script / Claude Code / Claude Desktop)
+  └─ StdioServerParameters(command="python", args=["mcp_server.py"])
+       └─ stdio_client → ClientSession → session.initialize()  ← JSON-RPC handshake
+            └─ session.call_tool("analyse_reflection", {...})
+                 └─ mcp_server.py receives request → runs pipeline → returns TextContent
+```
+
+---
+
 ## Model Usage
 
 | Component | Model | Why |
@@ -88,6 +121,9 @@ chroma_db/       ChromaDB persistent index — gitignored, rebuilt automatically
 - **`generate_followups()` never blocks the pipeline.** Any exception falls back to 4 hardcoded cross-domain questions. The stage always advances.
 - **`cross_domain_evidence` drives the results decision in app.py.** `"confirmed"` → show analysis; `"partial"` → show analysis with a caveat warning; `"insufficient"` → honest message + reset, no analysis shown. Never silently degrade.
 - **Follow-up questions must not reveal the hypothesis.** They probe domains (work, relationships, family of origin, self-talk, body, decisions) without naming the pattern. This is enforced in `FOLLOWUP_SYSTEM_PROMPT`.
+- **MCP server uses single-shot analysis.** `mcp_server.py` calls `analyse_structured()` without `followup_answers` — the interactive two-round flow doesn't map to a single tool call. Do not add `st.session_state` or multi-turn logic to the MCP server.
+- **MCP requires Python ≥ 3.10.** The project venv must be built with Python 3.11+ (Homebrew: `/opt/homebrew/bin/python3.11`). The system Python on macOS is 3.9 and cannot install `mcp`.
+- **MCP stdio transport means no print() in server code.** `mcp_server.py` and `practice_mcp_server.py` must not print to stdout — stdout is the JSON-RPC channel. Debug output goes to stderr or a log file.
 
 ---
 
@@ -112,10 +148,20 @@ See the checklist in `classifier.py` module docstring. Future parameters (`psych
 
 ## Running Locally
 
+**Streamlit UI (browser):**
 ```bash
 cd pattern-mirror
 source .venv/bin/activate
 streamlit run app.py
+```
+
+**MCP server (terminal / Claude Code integration):**
+```bash
+# Test the practice server (no API key needed)
+python test_mcp_client.py
+
+# Test the Pattern Mirror MCP server (runs full pipeline, costs tokens)
+python test_mcp_server.py
 ```
 
 Requires `.env` with:
@@ -123,6 +169,8 @@ Requires `.env` with:
 ANTHROPIC_API_KEY=...
 TAVILY_API_KEY=...   # optional — web search disabled if missing
 ```
+
+**Note:** The Streamlit UI and MCP server are two independent interfaces to the same pipeline. Running `mcp_server.py` does not replace or affect `app.py`.
 
 ## Skills
 
