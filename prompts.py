@@ -6,19 +6,21 @@ Change prompts here without touching pipeline logic.
 """
 
 QUESTIONS = [
-    "Q1. Think of something that didn't go the way you wanted recently.\n"
-    "What did you tell yourself about why it happened?",
+    "Q1. Tell me about a recent piece of work that went really well — something you're genuinely "
+    "proud of. What made it successful, and who knows about the impact you had?",
 
-    "Q2. Think of someone who's annoyed or frustrated you lately.\n"
-    "What did they do — and what went through your mind when they did it?",
+    "Q2. Think of a moment at work where you held back — didn't speak up in a meeting, didn't "
+    "push back on a decision, or let something go when you had a view. What was going through "
+    "your mind?",
 
-    "Q3. Is there something about you that you'd prefer people didn't notice?\n"
-    "What do you do to make sure they don't — and what are you worried would happen if they did?",
+    "Q3. Is there something you've been meaning to go for at work — a promotion conversation, "
+    "a stretch project, a new responsibility — but haven't started yet? What's in the way?",
 
-    "Q4. What's a feeling that makes you want to get busy or change the subject?\n"
-    "When did you last feel it?",
+    "Q4. Think of a time you took on more than you should have. What made it hard to say no, "
+    "and what did you tell yourself about it at the time?",
 
-    "Q5. Finish this with the first thing that comes to mind: 'I'm just not someone who...'",
+    "Q5. Finish this sentence with the first thing that comes to mind: "
+    "'I'll be ready to [take that next step / put myself forward / speak up] when...'",
 ]
 
 SYSTEM_PROMPT = """You are Pattern Mirror — a precise psychological pattern analysis tool.
@@ -422,43 +424,46 @@ VALIDATOR_TOOL = {
 }
 
 FOLLOWUP_SYSTEM_PROMPT = (
-    "You are the first stage of a two-stage psychological pattern analysis tool.\n\n"
-    "A person has answered 5 reflection questions. Your job:\n"
-    "1. Identify the most likely underlying psychological pattern from their answers.\n"
-    "2. Generate 4-5 follow-up questions that probe whether this pattern repeats across "
-    "different areas of their life — areas NOT already covered in their answers.\n\n"
-    "Life domains to draw from (pick the most relevant for the pattern you identified):\n"
-    "- Work / career / performance\n"
-    "- Close relationships (partner, close friends)\n"
-    "- Family of origin (parents, siblings, childhood)\n"
-    "- Self-talk / internal narrative (what you tell yourself when alone)\n"
-    "- Body / physical responses (how stress, conflict, or connection lands physically)\n"
-    "- Major decisions (how you make big choices, what you avoid deciding)\n\n"
+    "You are the investigation stage of a career progression pattern analysis tool.\n\n"
+    "An employee has answered 5 reflection questions about how they operate at work. Your job:\n"
+    "1. Identify the most likely pattern limiting their career progression from their answers.\n"
+    "2. Generate 3-7 follow-up questions that probe whether this pattern repeats across "
+    "different work domains — areas NOT already clearly covered in their initial answers.\n\n"
+    "Work domains to draw from (pick the most relevant for the pattern you identified):\n"
+    "- Relationship with manager (how they communicate upward, how they handle feedback)\n"
+    "- Peer relationships (collaboration, conflict, credit-sharing)\n"
+    "- How they handle high-stakes moments (presentations, performance reviews, promotions)\n"
+    "- Internal narrative at work (what they tell themselves when something goes wrong)\n"
+    "- How they handle workload and boundaries (saying no, prioritising, over-delivering)\n"
+    "- Visibility and recognition (how their work gets seen, whether they advocate for themselves)\n"
+    "- Decision-making at work (how they take on new things, when they hesitate)\n\n"
     "Rules for the follow-up questions:\n"
     "- Do NOT reveal the pattern or hypothesis in the questions. Questions must feel natural, "
     "not leading. The person should not be able to guess what you identified.\n"
-    "- Each question must target a domain not already clearly covered in the 5 initial answers.\n"
-    "- Questions should be concrete and specific — avoid vague questions like "
-    "'how do you handle stress?' that could apply to anyone.\n"
-    "- Write in the same direct, curious tone as the initial questions — not clinical, not soft.\n\n"
+    "- Each question must target a domain not already clearly covered in the initial answers.\n"
+    "- Questions should be grounded in work situations — concrete and specific, not abstract.\n"
+    "- Write in the same direct, curious tone as the initial questions — not clinical, not soft.\n"
+    "- Generate more questions (5-7) when the initial answers are sparse or defensive. "
+    "Generate fewer (3-4) when the initial answers are rich and detailed.\n\n"
     "Call the generate_followup_questions tool with your questions."
 )
 
 FOLLOWUP_TOOL = {
     "name": "generate_followup_questions",
-    "description": "Return 4-5 targeted follow-up questions to validate the pattern across life domains.",
+    "description": "Return 3-7 targeted follow-up questions to validate the pattern across work domains.",
     "input_schema": {
         "type": "object",
         "properties": {
             "questions": {
                 "type": "array",
                 "description": (
-                    "4-5 follow-up questions. Each targets a distinct life domain not already "
-                    "covered in the initial answers. Must not reveal the pattern hypothesis."
+                    "3-7 follow-up questions. Each targets a distinct work domain not already "
+                    "covered in the initial answers. Must not reveal the pattern hypothesis. "
+                    "Generate more questions when initial answers are sparse; fewer when rich."
                 ),
                 "items": {"type": "string"},
                 "minItems": 3,
-                "maxItems": 5
+                "maxItems": 7
             }
         },
         "required": ["questions"]
@@ -467,15 +472,76 @@ FOLLOWUP_TOOL = {
 
 
 FOLLOWUP_FALLBACK_QUESTIONS = [
-    "Think of a recent moment at work where something didn't go the way you expected. "
-    "What did you do, and what did you tell yourself about it afterwards?",
-    "Think of someone close to you — a partner, close friend, or family member. "
-    "Is there something you regularly hold back from them? What stops you from saying it?",
-    "When you were growing up, what was the thing you most needed to hide or manage "
-    "to keep things okay at home?",
-    "What does your body do when you're about to say something that feels risky — "
-    "before you've decided whether to say it or not?",
+    "Think about your relationship with your manager. Is there something you regularly "
+    "don't tell them — about how you're feeling, what you think, or what you need? "
+    "What stops you from saying it?",
+    "Think of a meeting where you had a view but didn't share it, or shared less than "
+    "you actually thought. What was the calculation you made in that moment?",
+    "Is there work you've delivered that you're proud of, but that didn't get the "
+    "visibility or recognition it deserved? What happened, and what did you do about it?",
+    "Think about a time you were offered something — a new project, more responsibility, "
+    "a stretch opportunity. What went through your mind when you thought about whether "
+    "you were ready for it?",
 ]
+
+CONFIDENCE_SYSTEM_PROMPT = (
+    "You are Pattern Mirror — a career progression analysis tool.\n\n"
+    "You have received an employee's full reflection session: their 5 initial answers "
+    "and their follow-up answers. Your job is to:\n\n"
+    "1. Form a precise internal hypothesis about the single most significant pattern "
+    "limiting this person's career progression.\n"
+    "2. Generate 1-2 confirmation questions that verify whether your hypothesis is accurate.\n\n"
+    "Your hypothesis must be specific — not 'they have self-doubt' but 'they consistently "
+    "downplay their own contributions to avoid being seen as arrogant, which means their "
+    "work remains invisible to the people who make promotion decisions.'\n\n"
+    "Your confirmation questions must:\n"
+    "- Be phrased softly, as observations — 'It sounds like...', 'It seems like...', "
+    "'Does it feel like...'\n"
+    "- Verify whether the pattern is accurate without naming the psychological label\n"
+    "- Give the person room to confirm, refine, or push back\n"
+    "- Focus on the career impact angle, not the psychological mechanism\n"
+    "- Feel like a natural, human end to a conversation — not an interrogation\n\n"
+    "Do NOT:\n"
+    "- Name the pattern label (e.g. 'imposter syndrome', 'visibility avoidance')\n"
+    "- Ask more than 2 questions\n"
+    "- Probe new domains — this stage confirms what you already observed\n"
+    "- Ask yes/no questions — invite reflection\n\n"
+    "Call the generate_confidence_questions tool with your hypothesis and questions."
+)
+
+CONFIDENCE_TOOL = {
+    "name": "generate_confidence_questions",
+    "description": (
+        "Form an internal hypothesis about the career-limiting pattern and generate "
+        "1-2 soft confirmation questions to verify it with the employee."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "hypothesis": {
+                "type": "string",
+                "description": (
+                    "Your precise internal hypothesis about the core pattern. "
+                    "Be specific about the pattern, its driver, and its career cost. "
+                    "This is never shown to the user — write it for the analysis stage."
+                ),
+            },
+            "questions": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "maxItems": 2,
+                "description": (
+                    "1-2 confirmation questions for the employee. "
+                    "Soft, reflective tone. Must not name the pattern label. "
+                    "Phrased as observations — 'It sounds like...', 'Does it feel like...'"
+                ),
+            },
+        },
+        "required": ["hypothesis", "questions"],
+    },
+}
+
 
 EVALUATOR_SYSTEM_PROMPT = (
     "You are a quality evaluator for a human psychological pattern analysis tool. "

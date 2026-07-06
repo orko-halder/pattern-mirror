@@ -18,29 +18,38 @@ SERVER = StdioServerParameters(
 )
 
 SAMPLE_ANSWERS = [
-    # Q1: Think of something that didn't go the way you wanted recently.
-    # What did you tell yourself about why it happened?
-    "A project I worked hard on got shelved. I told myself I should have seen it coming — "
-    "I always overestimate how much people actually care about the work.",
+    # Q1: Tell me about a recent piece of work that went really well — something you're
+    # genuinely proud of. What made it successful, and who knows about the impact you had?
+    "I redesigned the onboarding flow for our app — it dropped drop-off by 30%. "
+    "It worked because I got deep into the analytics before anyone else noticed the problem. "
+    "My manager knows I built it but I don't think the wider team really knows it was my work.",
 
-    # Q2: Think of someone who's annoyed or frustrated you lately.
-    # What did they do — and what went through your mind when they did it?
-    "A colleague took credit for an idea I shared in a meeting. I thought — of course, "
-    "that's what happens when you speak up. Better to stay quiet next time.",
+    # Q2: Think of a moment at work where you held back — didn't speak up in a meeting,
+    # didn't push back on a decision, or let something go when you had a view.
+    # What was going through your mind?
+    "We were discussing the new feature roadmap and I could see an architectural issue "
+    "that would cause problems later. I started to say something, then thought — "
+    "they've been here longer than me, maybe I'm missing context. I said nothing. "
+    "The issue came up three months later exactly as I'd expected.",
 
-    # Q3: Is there something about you that you'd prefer people didn't notice?
-    # What do you do to make sure they don't — and what are you worried would happen if they did?
-    "How much I second-guess myself. I talk confidently even when I'm unsure, "
-    "and I'm worried that if people saw the doubt they'd stop trusting my judgment entirely.",
+    # Q3: Is there something you've been meaning to go for at work — a promotion conversation,
+    # a stretch project, a new responsibility — but haven't started yet?
+    # What's in the way?
+    "I've been thinking about asking for a lead role for about a year. "
+    "I keep telling myself I need to demonstrate a bit more first — "
+    "finish this project, get that feedback, build one more thing. "
+    "There's always one more thing I need to prove before I feel ready.",
 
-    # Q4: What's a feeling that makes you want to get busy or change the subject?
-    # When did you last feel it?
-    "Feeling overlooked. Last week in a team meeting where decisions got made without anyone "
-    "asking my view, even on things I know well. I went straight to my task list afterwards.",
+    # Q4: Think of a time you took on more than you should have. What made it hard to say no,
+    # and what did you tell yourself about it at the time?
+    "Last quarter I said yes to three parallel projects. I told myself I could manage it "
+    "and that saying no would signal I wasn't committed. I burned out by week six. "
+    "I still didn't ask for help — I just worked weekends until it was done.",
 
-    # Q5: Finish this with the first thing that comes to mind:
-    # 'I'm just not someone who...'
-    "I'm just not someone who makes a fuss about things.",
+    # Q5: Finish this sentence with the first thing that comes to mind:
+    # 'I'll be ready to [take that next step / put myself forward / speak up] when...'
+    "I'll be ready to put myself forward for a lead role when I've proven I can handle "
+    "the really complex stuff without needing any support.",
 ]
 
 

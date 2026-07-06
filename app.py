@@ -2,9 +2,10 @@
 Pattern Mirror — Streamlit web app.
 
 Three-stage flow:
-  1. "initial"  — user answers 5 reflection questions + optional context file
-  2. "followup" — Haiku generates 4-5 targeted follow-up questions; user answers them
-  3. Results rendered inline after stage 2
+  1. "initial"    — user answers 5 career-progression questions + optional context file
+  2. "followup"   — Sonnet generates 3-7 targeted work-domain follow-up questions; user answers them
+  3. "confidence" — Sonnet forms internal hypothesis, generates 1-2 confirmation questions
+  4. Results rendered after user answers confidence questions
 
 All logic imported from the existing pipeline modules.
 """
@@ -20,6 +21,7 @@ from analyser import analyse_structured, PipelineError
 from middleware import pre_process, post_process
 from file_context import upload_context_file, delete_file
 from followup import generate_followups
+from confidence import generate_confidence_questions
 from config import SONNET_MODEL
 
 
@@ -49,6 +51,12 @@ if "initial_answers" not in st.session_state:
     st.session_state.initial_answers = []
 if "followup_questions" not in st.session_state:
     st.session_state.followup_questions = []
+if "followup_answers" not in st.session_state:
+    st.session_state.followup_answers = []
+if "confidence_questions" not in st.session_state:
+    st.session_state.confidence_questions = []
+if "hypothesis" not in st.session_state:
+    st.session_state.hypothesis = ""
 if "extended_thinking" not in st.session_state:
     st.session_state.extended_thinking = False
 if "context_file_id" not in st.session_state:
@@ -195,15 +203,74 @@ elif st.session_state.stage == "followup":
         st.write("")
 
     st.divider()
-    col_back, col_analyse = st.columns([1, 3])
+    col_back, col_continue = st.columns([1, 3])
     with col_back:
         if st.button("← Back", use_container_width=True):
-            # Return to initial stage — keep context file for cleanup
+            # Return to initial stage — clean up context file
             context_file_id = st.session_state.context_file_id
             if context_file_id:
                 delete_file(get_client(), context_file_id)
             st.session_state.stage = "initial"
             st.session_state.context_file_id = None
+            st.rerun()
+    with col_continue:
+        continue_btn = st.button("Continue →", type="primary", use_container_width=True)
+
+    if continue_btn:
+        client = get_client()
+
+        # Persist follow-up answers before advancing — needed by confidence stage
+        st.session_state.followup_answers = followup_answers
+
+        # Generate confidence questions — Sonnet forms hypothesis + 1-2 confirmation questions
+        with st.spinner("Almost there — preparing final questions..."):
+            confidence_result = generate_confidence_questions(
+                client,
+                st.session_state.initial_answers,
+                followup_answers,
+            )
+
+        st.session_state.confidence_questions = confidence_result.questions
+        st.session_state.hypothesis = confidence_result.hypothesis
+        st.session_state.stage = "confidence"
+        st.rerun()
+
+
+
+# ════════════════════════════════════════════════════════════
+# STAGE: confidence — 1-2 hypothesis confirmation questions
+# ════════════════════════════════════════════════════════════
+elif st.session_state.stage == "confidence":
+
+    st.subheader("One last check")
+    st.caption(
+        "Before we draw any conclusions, we want to make sure we've understood you correctly. "
+        "Answer honestly — if something doesn't feel right, say so."
+    )
+    st.write("")
+
+    confidence_answers = []
+    for i, question in enumerate(st.session_state.confidence_questions, 1):
+        st.markdown(f"**{question}**")
+        answer = st.text_area(
+            label=f"CQ{i}",
+            label_visibility="collapsed",
+            placeholder="Your answer...",
+            key=f"cq{i}",
+            height=100,
+        )
+        confidence_answers.append({
+            "question": question,
+            "answer": answer.strip() if answer.strip() else "[no answer given]",
+            "hypothesis": st.session_state.hypothesis,
+        })
+        st.write("")
+
+    st.divider()
+    col_back, col_analyse = st.columns([1, 3])
+    with col_back:
+        if st.button("← Back", use_container_width=True):
+            st.session_state.stage = "followup"
             st.rerun()
     with col_analyse:
         analyse_btn = st.button("Analyse", type="primary", use_container_width=True)
@@ -214,7 +281,6 @@ elif st.session_state.stage == "followup":
         result = None
 
         try:
-            # Accurate preflight token count
             preflight_tokens = count_tokens_preflight(client, st.session_state.initial_answers)
 
             st.divider()
@@ -232,14 +298,14 @@ elif st.session_state.stage == "followup":
                         st.session_state.initial_answers,
                         extended_thinking=st.session_state.extended_thinking,
                         context_file_id=context_file_id,
-                        followup_answers=followup_answers,
+                        followup_answers=st.session_state.followup_answers,
+                        confidence_answers=confidence_answers,
                     )
             except PipelineError as e:
                 st.error(str(e))
                 st.stop()
 
         finally:
-            # Always delete the context file — runs even when st.stop() is raised
             if context_file_id:
                 delete_file(client, context_file_id)
                 st.session_state.context_file_id = None
@@ -252,14 +318,14 @@ elif st.session_state.stage == "followup":
         cross_domain = result.data.get("cross_domain_evidence", "partial")
         if cross_domain == "insufficient":
             st.info(
-                "The follow-up answers didn't give us enough to confirm whether this pattern "
-                "repeats across different areas of your life. That's okay — it might be more "
-                "situational than structural. Try again with more specific answers, or explore "
-                "a different angle."
+                "The answers didn't give us enough to confirm whether this pattern "
+                "repeats across different areas of your work life. That's okay — it might be "
+                "more situational than structural. Try again with more specific answers, "
+                "or explore a different angle."
             )
             if st.button("Start a new reflection", use_container_width=True):
-                for key in ["stage", "initial_answers", "followup_questions",
-                            "extended_thinking", "context_file_id"]:
+                for key in ["stage", "initial_answers", "followup_questions", "followup_answers",
+                            "confidence_questions", "hypothesis", "extended_thinking", "context_file_id"]:
                     st.session_state.pop(key, None)
                 st.rerun()
             st.stop()
@@ -334,22 +400,10 @@ elif st.session_state.stage == "followup":
             for c in result.citations:
                 st.markdown(f"- [{c['title']}]({c['url']})")
 
-        # Evaluation — disabled for now to save tokens during development
-        # Re-enable before user testing: uncomment the block below
-        # st.divider()
-        # st.subheader("Quality Evaluation")
-        # with st.spinner("Evaluating output..."):
-        #     with st.expander("See evaluation", expanded=False):
-        #         import io, contextlib
-        #         buffer = io.StringIO()
-        #         with contextlib.redirect_stdout(buffer):
-        #             evaluate_output(client, result.text)
-        #         st.text(buffer.getvalue().strip())
-
         # Reset
         st.markdown("---")
         if st.button("Start a new reflection", use_container_width=True):
-            for key in ["stage", "initial_answers", "followup_questions",
-                        "extended_thinking", "context_file_id"]:
+            for key in ["stage", "initial_answers", "followup_questions", "followup_answers",
+                        "confidence_questions", "hypothesis", "extended_thinking", "context_file_id"]:
                 st.session_state.pop(key, None)
             st.rerun()

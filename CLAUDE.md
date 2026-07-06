@@ -2,7 +2,9 @@
 
 ## What This Project Is
 
-A psychological pattern analysis tool. Users answer 5 structured reflection questions, then respond to 4-5 dynamically generated follow-up questions that probe whether the identified pattern repeats across life domains. The system identifies unconscious recurring patterns and returns a structured analysis with a deployable protocol.
+A career progression pattern analysis tool. Users answer 5 structured questions about how they operate at work, then move through a three-stage pipeline: AI-driven investigation (3-7 work-domain follow-up questions), a confidence check (Sonnet forms an internal hypothesis and generates 1-2 soft confirmation questions), and a final analysis that returns a named pattern with a deployable protocol.
+
+The tool is designed for the Cognizant Bluebolt initiative — helping employees understand what's holding them back from career progression (visibility avoidance, imposter syndrome, readiness deferral, over-commitment, silence at key moments) and what to do about it.
 
 This is also a learning project for the Claude Certified Architect exam. Every module demonstrates a specific Claude API concept.
 
@@ -11,11 +13,12 @@ This is also a learning project for the Claude Certified Architect exam. Every m
 ## Architecture
 
 ```
-app.py                Streamlit UI — 3-stage flow (initial → followup → results)
+app.py                Streamlit UI — 4-stage flow (initial → followup → confidence → results)
 middleware.py         Pre/post processing — token estimate, crisis check, PII, cost log, safety filter
 file_context.py       Files API — upload/delete context documents, build document blocks
 validator.py          Input quality check (Haiku) — runs before analysis; format_answers()
-followup.py           Follow-up question generator (Haiku) — stage 1 of two-stage pipeline
+followup.py           Follow-up question generator (Sonnet) — stage 1 of three-stage pipeline
+confidence.py         Confidence check generator (Sonnet) — forms hypothesis + 1-2 confirmation questions
 classifier.py         Readiness classifier (Haiku) — shapes delivery mode
 analyser.py           Main pipeline (Sonnet) — tool use loop, returns AnalysisResult
 prompts.py            All prompts, tool schemas, delivery variants — no logic here
@@ -35,7 +38,10 @@ test_mcp_client.py    Test client for practice MCP server
 `app.py` → `pre_process()` → `upload_context_file()` (optional) → `validate_answers()` → `generate_followups()` → advance to stage 2
 
 **Flow (stage 2 — follow-up answers):**
-`app.py` → `classify_readiness()` → `analyse_structured(followup_answers=...)` → `post_process()` → render results
+`app.py` → user answers 3-7 work-domain follow-up questions → `generate_confidence_questions()` → advance to stage 3
+
+**Flow (stage 3 — confidence check):**
+`app.py` → user answers 1-2 confirmation questions → `analyse_structured(followup_answers=..., confidence_answers=...)` → `post_process()` → render results
 
 ---
 
@@ -60,9 +66,13 @@ test_mcp_client.py    Test client for practice MCP server
 
 **`classifier.py`** — Claude classifies `self_awareness` and `fragility_risk`. Python derives `delivery_mode` deterministically in `derive_delivery_mode()`. Do not ask Claude to derive the delivery mode — it's inconsistent at boundaries.
 
-**`followup.py`** — Haiku follow-up generator. `generate_followups(client, initial_answers) → list[str]`. Uses forced tool_choice (`generate_followup_questions`). Returns 4-5 cross-domain questions; Claude's internal pattern hypothesis is never surfaced to the user. Falls back to 4 hardcoded broad questions on any API failure — pipeline must not block on follow-up generation failure.
+**`followup.py`** — Sonnet follow-up generator. `generate_followups(client, initial_answers) → list[str]`. Uses forced tool_choice (`generate_followup_questions`). Returns 3-7 work-domain questions; Claude's internal pattern hypothesis is never surfaced to the user. Falls back to 4 hardcoded work-specific questions on any API failure — pipeline must not block on follow-up generation failure. Sonnet used here (not Haiku) because hypothesis quality directly affects confidence check and analysis accuracy.
 
-**`analyser.py`** — the tool use loop. `force_final=True` after the first tool call forces `pattern_analysis`. Extended thinking is enabled on the first call only, disabled when `force_final=True`. Truncation is handled via retry — messages are never modified, only `max_tokens` changes. Prompt caching is always active — system prompt and tools are marked with `cache_control: ephemeral` so calls 2 and 3 in the loop read from cache at 0.10× cost. Accepts optional `followup_answers` — when provided, passes both answer sets to `format_answers()` which splits them into `<initial_answers>` and `<validation_answers>` XML blocks.
+**`confidence.py`** — Sonnet confidence check generator. `generate_confidence_questions(client, initial_answers, followup_answers) → ConfidenceResult`. Reads all collected answers, forms a precise internal hypothesis about the career-limiting pattern, and generates 1-2 soft confirmation questions phrased as observations (never as yes/no, never revealing the pattern label). Falls back to a single broad open question on any API failure — pipeline must not block.
+- `ConfidenceResult.hypothesis` — internal string passed to `analyse_structured()` as primed context. Never shown to the user.
+- `ConfidenceResult.questions` — 1-2 strings shown to the user in Stage 3.
+
+**`analyser.py`** — the tool use loop. `force_final=True` after the first tool call forces `pattern_analysis`. Extended thinking is enabled on the first call only, disabled when `force_final=True`. Truncation is handled via retry — messages are never modified, only `max_tokens` changes. Prompt caching is always active — system prompt and tools are marked with `cache_control: ephemeral` so calls 2 and 3 in the loop read from cache at 0.10× cost. Accepts optional `followup_answers` and `confidence_answers` — when provided, `format_answers()` splits the XML into `<initial_answers>`, `<validation_answers>`, and `<confirmation_answers>` blocks. The `<confirmation_answers>` block includes a `hypothesis` attribute on each answer so Sonnet starts the analysis with the primed hypothesis context.
 
 ---
 
@@ -99,7 +109,8 @@ MCP client (test script / Claude Code / Claude Desktop)
 | Component | Model | Why |
 |---|---|---|
 | `validate_answers` | `claude-haiku-4-5-20251001` | Binary check — fast, cheap |
-| `generate_followups` | `claude-haiku-4-5-20251001` | Pattern hypothesis + question generation — upgrade to Sonnet if quality is insufficient |
+| `generate_followups` | `claude-sonnet-4-6` | Hypothesis quality matters — weak hypothesis = weak confidence check and weak analysis |
+| `generate_confidence_questions` | `claude-sonnet-4-6` | Precision hypothesis + soft question framing — quality-sensitive |
 | `classify_readiness` | `claude-haiku-4-5-20251001` | Pattern matching — upgrade to Sonnet when ready |
 | `analyse_structured` | `claude-sonnet-4-6` | Core product — quality matters |
 | `evaluate_output` | `claude-haiku-4-5-20251001` | Rubric scoring — mechanical task |
@@ -118,9 +129,12 @@ MCP client (test script / Claude Code / Claude Desktop)
 - **Context files must be deleted after use.** `app.py` wraps the full pipeline in `try/finally` to ensure `delete_file()` is always called, even when `st.stop()` is raised mid-pipeline.
 - **Prompt caching requires `betas=["prompt-caching-2024-07-31"]`.** Both paths in `analyser.py` (with and without Files API) use `client.beta.messages.create`. When Files API is also active, both betas are passed: `[PROMPT_CACHING_BETA, "files-api-2025-04-14"]`. The system prompt is passed as a list (not a string) with `cache_control: ephemeral` on the text block. Tool schemas are cached by marking the last tool in the list — never mutate the original constants, build a new list.
 - **Minimum cacheable block is 1024 tokens.** The system prompt + tools in Pattern Mirror comfortably exceed this. Don't add `cache_control` to short prompts — it has no effect and adds noise.
-- **`generate_followups()` never blocks the pipeline.** Any exception falls back to 4 hardcoded cross-domain questions. The stage always advances.
+- **`generate_followups()` never blocks the pipeline.** Any exception falls back to 4 hardcoded work-specific questions. The stage always advances.
+- **`generate_confidence_questions()` never blocks the pipeline.** Any exception falls back to a single broad open question. `ConfidenceResult.hypothesis` is set to `"pattern unclear — proceeding without primed hypothesis"` so `analyse_structured()` still receives a value but understands there is no primed context.
 - **`cross_domain_evidence` drives the results decision in app.py.** `"confirmed"` → show analysis; `"partial"` → show analysis with a caveat warning; `"insufficient"` → honest message + reset, no analysis shown. Never silently degrade.
-- **Follow-up questions must not reveal the hypothesis.** They probe domains (work, relationships, family of origin, self-talk, body, decisions) without naming the pattern. This is enforced in `FOLLOWUP_SYSTEM_PROMPT`.
+- **Follow-up questions must not reveal the hypothesis.** They probe work domains (manager relationship, peer dynamics, high-stakes moments, visibility, workload, decisions) without naming the pattern. This is enforced in `FOLLOWUP_SYSTEM_PROMPT`.
+- **Confidence questions must not name the pattern label.** They are phrased as soft observations ("It sounds like...", "Does it feel like...") and give the employee room to confirm, refine, or push back. Enforced in `CONFIDENCE_SYSTEM_PROMPT`.
+- **Confidence answers are always passed to `analyse_structured()`, even if the employee denies the hypothesis.** Denial is data — it either refines the analysis or triggers `cross_domain_evidence: insufficient`. Never discard the confidence stage answers.
 - **MCP server uses single-shot analysis.** `mcp_server.py` calls `analyse_structured()` without `followup_answers` — the interactive two-round flow doesn't map to a single tool call. Do not add `st.session_state` or multi-turn logic to the MCP server.
 - **MCP requires Python ≥ 3.10.** The project venv must be built with Python 3.11+ (Homebrew: `/opt/homebrew/bin/python3.11`). The system Python on macOS is 3.9 and cannot install `mcp`.
 - **MCP stdio transport means no print() in server code.** `mcp_server.py` and `practice_mcp_server.py` must not print to stdout — stdout is the JSON-RPC channel. Debug output goes to stderr or a log file.

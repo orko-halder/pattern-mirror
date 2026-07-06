@@ -39,6 +39,7 @@ def analyse_structured(
     extended_thinking: bool = False,
     context_file_id: Optional[str] = None,
     followup_answers: Optional[list[dict]] = None,
+    confidence_answers: Optional[list[dict]] = None,
 ) -> AnalysisResult:
     """Send answers to Claude, get back structured JSON.
     Returns AnalysisResult(data, text, citations).
@@ -60,6 +61,11 @@ def analyse_structured(
     followup_answers: optional list of follow-up Q&A dicts (each has 'question' and 'answer').
     When provided, format_answers() splits the XML into <initial_answers> and
     <validation_answers> so Claude can see both phases together.
+
+    confidence_answers: optional list of confirmation Q&A dicts (each has 'question',
+    'answer', and 'hypothesis'). When provided, format_answers() adds a
+    <confirmation_answers> block so Claude receives the primed hypothesis and the
+    user's confirmation response alongside all other answers.
     """
     # Classify readiness — profile shapes delivery mode
     profile = classify_readiness(client, answers)
@@ -74,7 +80,7 @@ def analyse_structured(
         "cache_control": {"type": "ephemeral"},
     }]
 
-    user_text = format_answers(answers, followup_answers)
+    user_text = format_answers(answers, followup_answers, confidence_answers)
 
     # If a context file was uploaded, prepend it as a document block.
     # The beta header is required for all calls in the loop because the document

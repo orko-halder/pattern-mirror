@@ -23,6 +23,7 @@ from config import HAIKU_MODEL, MAX_TOKENS_VALIDATE, SONNET_MODEL
 def format_answers(
     answers: list[dict],
     followup_answers: Optional[list[dict]] = None,
+    confidence_answers: Optional[list[dict]] = None,
 ) -> str:
     """Format answers into XML-tagged block for the prompt.
 
@@ -31,6 +32,10 @@ def format_answers(
 
     With followup_answers: splits into <initial_answers> and <validation_answers>.
     Each follow-up item must have 'question' (the text) and 'answer' keys.
+
+    With confidence_answers: adds a <confirmation_answers> block after validation.
+    Each confidence item must have 'question', 'answer', and 'hypothesis' keys.
+    The hypothesis attribute gives Sonnet the context for what was being confirmed.
     """
     if followup_answers is None:
         formatted = "<reflection_session>\n"
@@ -51,6 +56,17 @@ def format_answers(
             f"{item['answer']}</answer>\n"
         )
     formatted += "  </validation_answers>\n"
+
+    if confidence_answers:
+        formatted += "  <confirmation_answers>\n"
+        for i, item in enumerate(confidence_answers, 1):
+            hypothesis_attr = f" hypothesis=\"{item.get('hypothesis', '')}\"" if item.get("hypothesis") else ""
+            formatted += (
+                f"    <answer id=\"C{i}\"{hypothesis_attr} question=\"{item['question']}\">"
+                f"{item['answer']}</answer>\n"
+            )
+        formatted += "  </confirmation_answers>\n"
+
     formatted += "</reflection_session>"
     return formatted
 

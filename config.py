@@ -21,6 +21,7 @@ MAX_TOKENS_ANALYSE = 4000       # output tokens — used for both thinking and n
 MAX_TOKENS_ANALYSE_SHORT = 2048  # used when extended_thinking=False or on truncation retry
 MAX_TOKENS_VALIDATE = 300
 MAX_TOKENS_CLASSIFY = 512
+MAX_TOKENS_CONFIDENCE = 800     # Sonnet hypothesis formation + 1-2 confirmation questions
 MAX_TOKENS_EVALUATE = 500
 
 # ── Tool use loop ─────────────────────────────────────────────
