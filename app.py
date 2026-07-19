@@ -1,11 +1,11 @@
 """
 Pattern Mirror — Streamlit web app.
 
-Three-stage flow:
-  1. "initial"    — user answers 5 career-progression questions + optional context file
-  2. "followup"   — Sonnet generates 3-7 targeted work-domain follow-up questions; user answers them
-  3. "confidence" — Sonnet forms internal hypothesis, generates 1-2 confirmation questions
-  4. Results rendered after user answers confidence questions
+Four-layer flow:
+  1. "reflection"   — user answers 5 career-progression questions + optional context file
+  2. "investigation" — Sonnet generates 3-7 targeted investigation questions; user answers them
+  3. "mirror"       — Sonnet forms internal hypothesis, generates 1-2 reflection questions
+  4. Results rendered after user answers mirror questions
 
 All logic imported from the existing pipeline modules.
 """
@@ -20,8 +20,8 @@ from validator import validate_answers, validate_context_file, count_tokens_pref
 from analyser import analyse_structured, PipelineError
 from middleware import pre_process, post_process
 from file_context import upload_context_file, delete_file
-from followup import generate_followups
-from confidence import generate_confidence_questions
+from investigation import generate_investigation_questions
+from mirror import generate_mirror_questions
 from config import SONNET_MODEL
 
 
@@ -46,15 +46,15 @@ def get_client():
 
 # ── Session state defaults ───────────────────────────────────
 if "stage" not in st.session_state:
-    st.session_state.stage = "initial"
-if "initial_answers" not in st.session_state:
-    st.session_state.initial_answers = []
-if "followup_questions" not in st.session_state:
-    st.session_state.followup_questions = []
-if "followup_answers" not in st.session_state:
-    st.session_state.followup_answers = []
-if "confidence_questions" not in st.session_state:
-    st.session_state.confidence_questions = []
+    st.session_state.stage = "reflection"
+if "reflection_answers" not in st.session_state:
+    st.session_state.reflection_answers = []
+if "investigation_questions" not in st.session_state:
+    st.session_state.investigation_questions = []
+if "investigation_answers" not in st.session_state:
+    st.session_state.investigation_answers = []
+if "mirror_questions" not in st.session_state:
+    st.session_state.mirror_questions = []
 if "hypothesis" not in st.session_state:
     st.session_state.hypothesis = ""
 if "extended_thinking" not in st.session_state:
@@ -70,9 +70,9 @@ st.divider()
 
 
 # ════════════════════════════════════════════════════════════
-# STAGE: initial — 5 questions + context file + Continue
+# LAYER 1: reflection — 5 questions + context file + Continue
 # ════════════════════════════════════════════════════════════
-if st.session_state.stage == "initial":
+if st.session_state.stage == "reflection":
 
     # Context file (optional)
     uploaded_file = None
@@ -161,42 +161,41 @@ if st.session_state.stage == "initial":
                 delete_file(client, context_file_id)
             st.stop()
 
-        # Generate follow-up questions
-        with st.spinner("Generating follow-up questions..."):
-            followup_questions = generate_followups(client, answers)
+        # Generate investigation questions
+        with st.spinner("Generating investigation questions..."):
+            investigation_questions = generate_investigation_questions(client, answers)
 
         # Persist to session state and advance
-        st.session_state.initial_answers = answers
-        st.session_state.followup_questions = followup_questions
+        st.session_state.reflection_answers = answers
+        st.session_state.investigation_questions = investigation_questions
         st.session_state.extended_thinking = extended_thinking
         st.session_state.context_file_id = context_file_id
-        st.session_state.stage = "followup"
+        st.session_state.stage = "investigation"
         st.rerun()
 
 
 # ════════════════════════════════════════════════════════════
-# STAGE: followup — dynamic questions + Analyse / Back
+# LAYER 2: investigation — dynamic questions + Continue / Back
 # ════════════════════════════════════════════════════════════
-elif st.session_state.stage == "followup":
+elif st.session_state.stage == "investigation":
 
     st.subheader("A few more questions")
     st.caption(
-        "These help confirm whether the pattern you're exploring repeats across different "
-        "areas of your life, or is specific to one situation."
+        "We're looking for whether the same pattern shows up across different areas of your work."
     )
     st.write("")
 
-    followup_answers = []
-    for i, question in enumerate(st.session_state.followup_questions, 1):
+    investigation_answers = []
+    for i, question in enumerate(st.session_state.investigation_questions, 1):
         st.markdown(f"**{question}**")
         answer = st.text_area(
-            label=f"FQ{i}",
+            label=f"IQ{i}",
             label_visibility="collapsed",
             placeholder="Your answer...",
-            key=f"fq{i}",
+            key=f"iq{i}",
             height=100
         )
-        followup_answers.append({
+        investigation_answers.append({
             "question": question,
             "answer": answer.strip() if answer.strip() else "[no answer given]",
         })
@@ -206,11 +205,11 @@ elif st.session_state.stage == "followup":
     col_back, col_continue = st.columns([1, 3])
     with col_back:
         if st.button("← Back", use_container_width=True):
-            # Return to initial stage — clean up context file
+            # Return to reflection stage — clean up context file
             context_file_id = st.session_state.context_file_id
             if context_file_id:
                 delete_file(get_client(), context_file_id)
-            st.session_state.stage = "initial"
+            st.session_state.stage = "reflection"
             st.session_state.context_file_id = None
             st.rerun()
     with col_continue:
@@ -219,47 +218,47 @@ elif st.session_state.stage == "followup":
     if continue_btn:
         client = get_client()
 
-        # Persist follow-up answers before advancing — needed by confidence stage
-        st.session_state.followup_answers = followup_answers
+        # Persist investigation answers before advancing — needed by mirror stage
+        st.session_state.investigation_answers = investigation_answers
 
-        # Generate confidence questions — Sonnet forms hypothesis + 1-2 confirmation questions
+        # Generate mirror questions — Sonnet forms hypothesis + 1-2 reflection questions
         with st.spinner("Almost there — preparing final questions..."):
-            confidence_result = generate_confidence_questions(
+            mirror_result = generate_mirror_questions(
                 client,
-                st.session_state.initial_answers,
-                followup_answers,
+                st.session_state.reflection_answers,
+                investigation_answers,
             )
 
-        st.session_state.confidence_questions = confidence_result.questions
-        st.session_state.hypothesis = confidence_result.hypothesis
-        st.session_state.stage = "confidence"
+        st.session_state.mirror_questions = mirror_result.questions
+        st.session_state.hypothesis = mirror_result.hypothesis
+        st.session_state.stage = "mirror"
         st.rerun()
 
 
 
 # ════════════════════════════════════════════════════════════
-# STAGE: confidence — 1-2 hypothesis confirmation questions
+# LAYER 3: mirror — 1-2 reflection questions
 # ════════════════════════════════════════════════════════════
-elif st.session_state.stage == "confidence":
+elif st.session_state.stage == "mirror":
 
-    st.subheader("One last check")
+    st.subheader("Here's what we're seeing")
     st.caption(
-        "Before we draw any conclusions, we want to make sure we've understood you correctly. "
-        "Answer honestly — if something doesn't feel right, say so."
+        "Based on everything you've shared, we're reflecting back what we noticed. "
+        "If something doesn't land quite right, say so — your response shapes the final analysis."
     )
     st.write("")
 
-    confidence_answers = []
-    for i, question in enumerate(st.session_state.confidence_questions, 1):
+    mirror_answers = []
+    for i, question in enumerate(st.session_state.mirror_questions, 1):
         st.markdown(f"**{question}**")
         answer = st.text_area(
-            label=f"CQ{i}",
+            label=f"MQ{i}",
             label_visibility="collapsed",
             placeholder="Your answer...",
-            key=f"cq{i}",
+            key=f"mq{i}",
             height=100,
         )
-        confidence_answers.append({
+        mirror_answers.append({
             "question": question,
             "answer": answer.strip() if answer.strip() else "[no answer given]",
             "hypothesis": st.session_state.hypothesis,
@@ -270,7 +269,7 @@ elif st.session_state.stage == "confidence":
     col_back, col_analyse = st.columns([1, 3])
     with col_back:
         if st.button("← Back", use_container_width=True):
-            st.session_state.stage = "followup"
+            st.session_state.stage = "investigation"
             st.rerun()
     with col_analyse:
         analyse_btn = st.button("Analyse", type="primary", use_container_width=True)
@@ -281,7 +280,7 @@ elif st.session_state.stage == "confidence":
         result = None
 
         try:
-            preflight_tokens = count_tokens_preflight(client, st.session_state.initial_answers)
+            preflight_tokens = count_tokens_preflight(client, st.session_state.reflection_answers)
 
             st.divider()
             st.subheader("Pattern Analysis")
@@ -295,11 +294,11 @@ elif st.session_state.stage == "confidence":
                 with st.spinner(spinner_msg):
                     result = analyse_structured(
                         client,
-                        st.session_state.initial_answers,
+                        st.session_state.reflection_answers,
                         extended_thinking=st.session_state.extended_thinking,
                         context_file_id=context_file_id,
-                        followup_answers=st.session_state.followup_answers,
-                        confidence_answers=confidence_answers,
+                        investigation_answers=st.session_state.investigation_answers,
+                        mirror_answers=mirror_answers,
                     )
             except PipelineError as e:
                 st.error(str(e))
@@ -324,8 +323,8 @@ elif st.session_state.stage == "confidence":
                 "or explore a different angle."
             )
             if st.button("Start a new reflection", use_container_width=True):
-                for key in ["stage", "initial_answers", "followup_questions", "followup_answers",
-                            "confidence_questions", "hypothesis", "extended_thinking", "context_file_id"]:
+                for key in ["stage", "reflection_answers", "investigation_questions", "investigation_answers",
+                            "mirror_questions", "hypothesis", "extended_thinking", "context_file_id"]:
                     st.session_state.pop(key, None)
                 st.rerun()
             st.stop()
@@ -351,6 +350,10 @@ elif st.session_state.stage == "confidence":
         st.caption(core.get("plain_summary", ""))
         st.markdown(core.get("description", ""))
 
+        # What progressors do — rendered immediately after core pattern
+        if result.data.get("what_progressors_do"):
+            st.markdown(f"*{result.data.get('what_progressors_do', '')}*")
+
         # Secondary pattern
         secondary = result.data.get("secondary_pattern")
         if secondary:
@@ -364,34 +367,48 @@ elif st.session_state.stage == "confidence":
         for quote in result.data.get("evidence", []):
             st.markdown(f"> {quote}")
 
-        # Domains
-        st.markdown("---")
-        st.markdown("**Where It Shows Up**")
-        cols = st.columns(len(result.data.get("domains", [])) or 1)
-        for col, domain in zip(cols, result.data.get("domains", [])):
-            col.markdown(f"**{domain}**")
+        # Why this pattern
+        if result.data.get("pattern_rationale"):
+            st.markdown("---")
+            st.markdown("**Why this pattern**")
+            st.markdown(result.data.get("pattern_rationale", ""))
+
+        # Career cost
+        career_cost = result.data.get("career_cost", "")
+        if career_cost:
+            st.markdown("---")
+            st.error(f"**Career Cost** — {career_cost}")
+
+        # Career moments
+        career_moments = result.data.get("career_moments", [])
+        if career_moments:
+            st.markdown("---")
+            st.markdown("**Where This Shows Up at Work**")
+            for moment in career_moments:
+                st.markdown(f"- {moment}")
 
         # Payoff
         st.markdown("---")
-        st.markdown("**What It's Protecting You From**")
+        st.markdown("**What This Behaviour Is Designed to Avoid**")
         st.info(result.data.get("payoff", ""))
 
         # Protocol
         protocol = result.data.get("protocol", {})
         st.markdown("---")
         st.markdown("**The Protocol**")
+        if protocol.get("use_when"):
+            st.caption(protocol.get("use_when", ""))
         st.markdown(f"🔍 **Detection:** {protocol.get('detection_trigger', '')}")
-        st.markdown("**Steps:**")
-        for i, step in enumerate(protocol.get("steps", []), 1):
-            st.markdown(f"{i}. {step}")
+        steps = protocol.get("steps", [])
+        if steps:
+            st.markdown("**Steps:**")
+            steps_text = "\n".join(f"{i}. {step}" for i, step in enumerate(steps, 1))
+            st.markdown(steps_text)
         st.markdown(f"⚡ **If you can't stop right now:** {protocol.get('fallback_mid_activation', '')}")
-        st.markdown(f"🛑 **If you're completely overwhelmed:** {protocol.get('fallback_shutdown', '')}")
-        fc = protocol.get("failure_condition", {})
-        if isinstance(fc, dict):
-            st.warning(f"**If it goes wrong:** {fc.get('if_wrong', '')}")
-            st.success(f"**If it goes right:** {fc.get('if_right', '')}")
-        else:
-            st.warning(f"**Failure condition:** {fc}")
+        if protocol.get("next_action"):
+            st.markdown(f"**If it doesn't land:** {protocol.get('next_action', '')}")
+        if protocol.get("when_it_works"):
+            st.success(f"**When it works, watch for this:** {protocol.get('when_it_works', '')}")
 
         # Citations — only shown when web search was used
         if result.citations:

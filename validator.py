@@ -22,22 +22,22 @@ from config import HAIKU_MODEL, MAX_TOKENS_VALIDATE, SONNET_MODEL
 
 def format_answers(
     answers: list[dict],
-    followup_answers: Optional[list[dict]] = None,
-    confidence_answers: Optional[list[dict]] = None,
+    investigation_answers: Optional[list[dict]] = None,
+    mirror_answers: Optional[list[dict]] = None,
 ) -> str:
     """Format answers into XML-tagged block for the prompt.
 
-    Without followup_answers: flat <reflection_session> block — used for
-    validation, token counting, and follow-up generation.
+    Without investigation_answers: flat <reflection_session> block — used for
+    validation, token counting, and investigation generation.
 
-    With followup_answers: splits into <initial_answers> and <validation_answers>.
-    Each follow-up item must have 'question' (the text) and 'answer' keys.
+    With investigation_answers: splits into <initial_answers> and <investigation_answers>.
+    Each investigation item must have 'question' (the text) and 'answer' keys.
 
-    With confidence_answers: adds a <confirmation_answers> block after validation.
-    Each confidence item must have 'question', 'answer', and 'hypothesis' keys.
-    The hypothesis attribute gives Sonnet the context for what was being confirmed.
+    With mirror_answers: adds a <mirror_answers> block after investigation.
+    Each mirror item must have 'question', 'answer', and 'hypothesis' keys.
+    The hypothesis attribute gives Sonnet the primed context for the mirror stage.
     """
-    if followup_answers is None:
+    if investigation_answers is None:
         formatted = "<reflection_session>\n"
         for item in answers:
             formatted += f"  <answer id=\"{item['question']}\">{item['answer']}</answer>\n"
@@ -49,23 +49,23 @@ def format_answers(
     for item in answers:
         formatted += f"    <answer id=\"{item['question']}\">{item['answer']}</answer>\n"
     formatted += "  </initial_answers>\n"
-    formatted += "  <validation_answers>\n"
-    for i, item in enumerate(followup_answers, 1):
+    formatted += "  <investigation_answers>\n"
+    for i, item in enumerate(investigation_answers, 1):
         formatted += (
-            f"    <answer id=\"F{i}\" question=\"{item['question']}\">"
+            f"    <answer id=\"I{i}\" question=\"{item['question']}\">"
             f"{item['answer']}</answer>\n"
         )
-    formatted += "  </validation_answers>\n"
+    formatted += "  </investigation_answers>\n"
 
-    if confidence_answers:
-        formatted += "  <confirmation_answers>\n"
-        for i, item in enumerate(confidence_answers, 1):
+    if mirror_answers:
+        formatted += "  <mirror_answers>\n"
+        for i, item in enumerate(mirror_answers, 1):
             hypothesis_attr = f" hypothesis=\"{item.get('hypothesis', '')}\"" if item.get("hypothesis") else ""
             formatted += (
-                f"    <answer id=\"C{i}\"{hypothesis_attr} question=\"{item['question']}\">"
+                f"    <answer id=\"M{i}\"{hypothesis_attr} question=\"{item['question']}\">"
                 f"{item['answer']}</answer>\n"
             )
-        formatted += "  </confirmation_answers>\n"
+        formatted += "  </mirror_answers>\n"
 
     formatted += "</reflection_session>"
     return formatted
