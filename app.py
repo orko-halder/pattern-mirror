@@ -345,70 +345,74 @@ elif st.session_state.stage == "mirror":
             st.caption(post.cost_summary)
 
         # Core pattern
-        core = result.data.get("core_pattern", {})
-        confidence = core.get("confidence", "")
+        # Note: `.get(key) or default` throughout this block, not `.get(key, default)` —
+        # the latter only falls back when the key is ABSENT, not when the model
+        # explicitly returns null for it. See analyser.py's format_structured_output
+        # docstring for the incident this defended against.
+        core = result.data.get("core_pattern") or {}
+        confidence = core.get("confidence") or ""
         confidence_label = {"high": "🟢 High confidence", "medium": "🟡 Medium confidence", "low": "🔴 Low confidence"}.get(confidence, "")
-        st.markdown(f"### {core.get('name', '')}")
+        st.markdown(f"### {core.get('name') or ''}")
         if confidence_label:
             st.caption(confidence_label)
-        st.caption(core.get("plain_summary", ""))
-        st.markdown(core.get("description", ""))
+        st.caption(core.get("plain_summary") or "")
+        st.markdown(core.get("description") or "")
 
         # What progressors do
         if result.data.get("what_progressors_do"):
-            st.markdown(f"*{result.data.get('what_progressors_do', '')}*")
+            st.markdown(f"*{result.data.get('what_progressors_do') or ''}*")
 
         # Secondary pattern
         secondary = result.data.get("secondary_pattern")
         if secondary:
-            relationship = secondary.get("relationship_to_primary", "")
+            relationship = secondary.get("relationship_to_primary") or ""
             relationship_label = " (amplifies the primary pattern)" if relationship == "amplifying" else " (independent)" if relationship else ""
             st.markdown("---")
-            st.markdown(f"**Secondary Pattern — {secondary.get('name', '')}{relationship_label}**")
-            st.markdown(secondary.get("description", ""))
+            st.markdown(f"**Secondary Pattern — {secondary.get('name') or ''}{relationship_label}**")
+            st.markdown(secondary.get("description") or "")
 
         # Why this pattern
         if result.data.get("why_this_pattern"):
             st.markdown("---")
             st.markdown("**Why This Pattern**")
-            st.markdown(result.data.get("why_this_pattern", ""))
+            st.markdown(result.data.get("why_this_pattern") or "")
 
         # Evidence
         st.markdown("---")
         st.markdown("**Evidence**")
-        for quote in result.data.get("evidence", []):
+        for quote in (result.data.get("evidence") or []):
             st.markdown(f"> {quote}")
 
         # Pattern loop
-        loop = result.data.get("pattern_loop", {})
+        loop = result.data.get("pattern_loop") or {}
         if loop:
             st.markdown("---")
             st.markdown("**How the Pattern Plays Out**")
             if loop.get("trigger"):
-                st.markdown(f"**Trigger** — {loop.get('trigger', '')}")
+                st.markdown(f"**Trigger** — {loop.get('trigger') or ''}")
             if loop.get("automatic_response"):
-                st.markdown(f"**Automatic response** — {loop.get('automatic_response', '')}")
+                st.markdown(f"**Automatic response** — {loop.get('automatic_response') or ''}")
             if loop.get("interruption_point"):
-                st.info(f"**Interruption point** — {loop.get('interruption_point', '')}")
+                st.info(f"**Interruption point** — {loop.get('interruption_point') or ''}")
             if loop.get("immediate_relief"):
-                st.markdown(f"**Immediate relief** — {loop.get('immediate_relief', '')}")
+                st.markdown(f"**Immediate relief** — {loop.get('immediate_relief') or ''}")
             if loop.get("career_consequence"):
-                st.markdown(f"**Career consequence** — {loop.get('career_consequence', '')}")
+                st.markdown(f"**Career consequence** — {loop.get('career_consequence') or ''}")
 
         # Career cost
-        career_cost = result.data.get("career_cost", "")
+        career_cost = result.data.get("career_cost") or ""
         if career_cost:
             st.markdown("---")
             st.error(f"**Career Cost** — {career_cost}")
 
         # Career progression risk
-        risk = result.data.get("career_progression_risk", "")
+        risk = result.data.get("career_progression_risk") or ""
         if risk:
             risk_label = {"high": "🔴 High", "moderate": "🟡 Moderate", "low": "🟢 Low"}.get(risk, risk.capitalize())
             st.caption(f"Career Progression Risk: {risk_label}")
 
         # Career moments
-        career_moments = result.data.get("career_moments", [])
+        career_moments = result.data.get("career_moments") or []
         if career_moments:
             st.markdown("---")
             st.markdown("**Where This Shows Up at Work**")
@@ -418,32 +422,32 @@ elif st.session_state.stage == "mirror":
         # Avoided outcome
         st.markdown("---")
         st.markdown("**What This Behaviour Is Designed to Avoid**")
-        st.info(result.data.get("avoided_outcome", ""))
+        st.info(result.data.get("avoided_outcome") or "")
 
         # Prediction
         if result.data.get("prediction"):
             st.markdown("---")
             st.markdown("**Prediction**")
-            st.warning(result.data.get("prediction", ""))
+            st.warning(result.data.get("prediction") or "")
 
         # Protocol
-        protocol = result.data.get("protocol", {})
+        protocol = result.data.get("protocol") or {}
         st.markdown("---")
         st.markdown("**The Protocol**")
         if protocol.get("use_when"):
-            st.caption(protocol.get("use_when", ""))
+            st.caption(protocol.get("use_when") or "")
         if protocol.get("interruption_check"):
-            st.markdown(f"🛑 **Interruption check:** {protocol.get('interruption_check', '')}")
-        steps = protocol.get("steps", [])
+            st.markdown(f"🛑 **Interruption check:** {protocol.get('interruption_check') or ''}")
+        steps = protocol.get("steps") or []
         if steps:
             st.markdown("**Steps:**")
             steps_text = "\n".join(f"{i}. {step}" for i, step in enumerate(steps, 1))
             st.markdown(steps_text)
-        st.markdown(f"⚡ **If you can't stop right now:** {protocol.get('fallback_mid_activation', '')}")
+        st.markdown(f"⚡ **If you can't stop right now:** {protocol.get('fallback_mid_activation') or ''}")
         if protocol.get("next_action"):
-            st.markdown(f"**If it doesn't land:** {protocol.get('next_action', '')}")
+            st.markdown(f"**If it doesn't land:** {protocol.get('next_action') or ''}")
         if protocol.get("when_it_works"):
-            st.success(f"**When it works, watch for this:** {protocol.get('when_it_works', '')}")
+            st.success(f"**When it works, watch for this:** {protocol.get('when_it_works') or ''}")
 
         # Next experiment
         if protocol.get("next_experiment"):

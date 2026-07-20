@@ -217,67 +217,74 @@ def analyse_structured(
 
 
 def format_structured_output(data: dict) -> str:
-    """Render a structured analysis dict as readable CLI output."""
+    """Render a structured analysis dict as readable CLI output.
+
+    Defensive note: dict.get(key, default) only falls back to `default` when the
+    key is ABSENT — not when the model explicitly returns null for that key. Every
+    dict/list access below uses `data.get(key) or fallback` instead, so a stray
+    null anywhere in the model's JSON (e.g. "evidence": null, "steps": null)
+    degrades gracefully instead of raising a TypeError deep in this function.
+    """
     lines = []
 
     # Core pattern
-    core = data.get("core_pattern", {})
+    core = data.get("core_pattern") or {}
     lines.append("CORE PATTERN")
-    lines.append(core.get("name", ""))
+    lines.append(core.get("name") or "")
     if core.get("confidence"):
-        lines.append(f"Pattern confidence: {core.get('confidence', '').upper()}")
-    lines.append(core.get("plain_summary", ""))
-    lines.append(core.get("description", ""))
+        lines.append(f"Pattern confidence: {(core.get('confidence') or '').upper()}")
+    lines.append(core.get("plain_summary") or "")
+    lines.append(core.get("description") or "")
 
     if data.get("what_progressors_do"):
-        lines.append(f"\nWhat people who progress do: {data.get('what_progressors_do', '')}")
+        lines.append(f"\nWhat people who progress do: {data.get('what_progressors_do') or ''}")
 
     # Secondary pattern
     secondary = data.get("secondary_pattern")
     if secondary:
-        relationship = secondary.get("relationship_to_primary", "")
+        relationship = secondary.get("relationship_to_primary") or ""
         header = "SECONDARY PATTERN (amplifies the primary pattern)" if relationship == "amplifying" else "SECONDARY PATTERN (independent)"
         lines.append(f"\n{header}")
-        lines.append(secondary.get("name", ""))
-        lines.append(secondary.get("description", ""))
+        lines.append(secondary.get("name") or "")
+        lines.append(secondary.get("description") or "")
 
     # Why this pattern
     if data.get("why_this_pattern"):
         lines.append("\nWHY THIS PATTERN")
-        lines.append(data.get("why_this_pattern", ""))
+        lines.append(data.get("why_this_pattern") or "")
 
     # Evidence
     lines.append("\nEVIDENCE")
-    for quote in data.get("evidence", []):
+    for quote in (data.get("evidence") or []):
         lines.append(f'  "{quote}"')
 
     # Pattern loop
-    loop = data.get("pattern_loop", {})
+    loop = data.get("pattern_loop") or {}
     if loop:
         lines.append("\nHOW THE PATTERN PLAYS OUT")
         if loop.get("trigger"):
-            lines.append(f"  Trigger: {loop.get('trigger', '')}")
+            lines.append(f"  Trigger: {loop.get('trigger') or ''}")
         if loop.get("automatic_response"):
-            lines.append(f"  Automatic response: {loop.get('automatic_response', '')}")
+            lines.append(f"  Automatic response: {loop.get('automatic_response') or ''}")
         if loop.get("interruption_point"):
-            lines.append(f"  Interruption point: {loop.get('interruption_point', '')}")
+            lines.append(f"  Interruption point: {loop.get('interruption_point') or ''}")
         if loop.get("immediate_relief"):
-            lines.append(f"  Immediate relief: {loop.get('immediate_relief', '')}")
+            lines.append(f"  Immediate relief: {loop.get('immediate_relief') or ''}")
         if loop.get("career_consequence"):
-            lines.append(f"  Career consequence: {loop.get('career_consequence', '')}")
+            lines.append(f"  Career consequence: {loop.get('career_consequence') or ''}")
 
     # Career cost
-    career_cost = data.get("career_cost", "")
+    career_cost = data.get("career_cost") or ""
     if career_cost:
         lines.append("\nCAREER COST")
         lines.append(career_cost)
 
     # Career progression risk
     if data.get("career_progression_risk"):
-        lines.append(f"\nCAREER PROGRESSION RISK: {data.get('career_progression_risk', '').upper()}")
+        lines.append(f"\nCAREER PROGRESSION RISK: {(data.get('career_progression_risk') or '').upper()}")
 
     # Career moments
-    career_moments = data.get("career_moments", [])
+    career_moments = data.get("career_moments") or []
     if career_moments:
         lines.append("\nWHERE THIS SHOWS UP AT WORK")
         for moment in career_moments:
@@ -285,31 +292,31 @@ def format_structured_output(data: dict) -> str:
 
     # Avoided outcome
     lines.append("\nWHAT THIS BEHAVIOUR IS DESIGNED TO AVOID")
-    lines.append(data.get("avoided_outcome", ""))
+    lines.append(data.get("avoided_outcome") or "")
 
     # Prediction
     if data.get("prediction"):
         lines.append("\nPREDICTION")
-        lines.append(data.get("prediction", ""))
+        lines.append(data.get("prediction") or "")
 
     # Protocol
-    protocol = data.get("protocol", {})
+    protocol = data.get("protocol") or {}
     lines.append("\nTHE PROTOCOL")
     if protocol.get("use_when"):
-        lines.append(f"Use when: {protocol.get('use_when', '')}")
+        lines.append(f"Use when: {protocol.get('use_when') or ''}")
     if protocol.get("interruption_check"):
-        lines.append(f"Interruption check: {protocol.get('interruption_check', '')}")
-    for i, step in enumerate(protocol.get("steps", []), 1):
+        lines.append(f"Interruption check: {protocol.get('interruption_check') or ''}")
+    for i, step in enumerate(protocol.get("steps") or [], 1):
         lines.append(f"  {i}. {step}")
-    lines.append(f"If you can't stop right now: {protocol.get('fallback_mid_activation', '')}")
+    lines.append(f"If you can't stop right now: {protocol.get('fallback_mid_activation') or ''}")
     if protocol.get("next_action"):
-        lines.append(f"If it doesn't land: {protocol.get('next_action', '')}")
+        lines.append(f"If it doesn't land: {protocol.get('next_action') or ''}")
     if protocol.get("when_it_works"):
-        lines.append(f"When it works, watch for this: {protocol.get('when_it_works', '')}")
+        lines.append(f"When it works, watch for this: {protocol.get('when_it_works') or ''}")
 
     # Next experiment
     if protocol.get("next_experiment"):
-        lines.append(f"\nNEXT EXPERIMENT\n{protocol.get('next_experiment', '')}")
+        lines.append(f"\nNEXT EXPERIMENT\n{protocol.get('next_experiment') or ''}")
 
     return "\n".join(lines)
 
