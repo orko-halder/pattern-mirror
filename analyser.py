@@ -62,10 +62,10 @@ def analyse_structured(
     When provided, format_answers() splits the XML into <initial_answers> and
     <validation_answers> so Claude can see both phases together.
 
-    confidence_answers: optional list of confirmation Q&A dicts (each has 'question',
+    mirror_answers: optional list of mirror Q&A dicts (each has 'question',
     'answer', and 'hypothesis'). When provided, format_answers() adds a
-    <confirmation_answers> block so Claude receives the primed hypothesis and the
-    user's confirmation response alongside all other answers.
+    <mirror_answers> block so Claude receives the primed hypothesis and the
+    user's mirror response alongside all other answers.
     """
     # Classify readiness — profile shapes delivery mode
     profile = classify_readiness(client, answers)
@@ -220,48 +220,85 @@ def format_structured_output(data: dict) -> str:
     """Render a structured analysis dict as readable CLI output."""
     lines = []
 
+    # Core pattern
     core = data.get("core_pattern", {})
     lines.append("CORE PATTERN")
     lines.append(core.get("name", ""))
+    if core.get("confidence"):
+        lines.append(f"Pattern confidence: {core.get('confidence', '').upper()}")
     lines.append(core.get("plain_summary", ""))
     lines.append(core.get("description", ""))
 
     if data.get("what_progressors_do"):
         lines.append(f"\nWhat people who progress do: {data.get('what_progressors_do', '')}")
 
+    # Secondary pattern
     secondary = data.get("secondary_pattern")
     if secondary:
-        lines.append("\nSECONDARY PATTERN")
+        relationship = secondary.get("relationship_to_primary", "")
+        header = "SECONDARY PATTERN (amplifies the primary pattern)" if relationship == "amplifying" else "SECONDARY PATTERN (independent)"
+        lines.append(f"\n{header}")
         lines.append(secondary.get("name", ""))
         lines.append(secondary.get("description", ""))
 
+    # Why this pattern
+    if data.get("why_this_pattern"):
+        lines.append("\nWHY THIS PATTERN")
+        lines.append(data.get("why_this_pattern", ""))
+
+    # Evidence
     lines.append("\nEVIDENCE")
     for quote in data.get("evidence", []):
         lines.append(f'  "{quote}"')
 
-    if data.get("pattern_rationale"):
-        lines.append("\nWHY THIS PATTERN")
-        lines.append(data.get("pattern_rationale", ""))
+    # Pattern loop
+    loop = data.get("pattern_loop", {})
+    if loop:
+        lines.append("\nHOW THE PATTERN PLAYS OUT")
+        if loop.get("trigger"):
+            lines.append(f"  Trigger: {loop.get('trigger', '')}")
+        if loop.get("automatic_response"):
+            lines.append(f"  Automatic response: {loop.get('automatic_response', '')}")
+        if loop.get("interruption_point"):
+            lines.append(f"  Interruption point: {loop.get('interruption_point', '')}")
+        if loop.get("immediate_relief"):
+            lines.append(f"  Immediate relief: {loop.get('immediate_relief', '')}")
+        if loop.get("career_consequence"):
+            lines.append(f"  Career consequence: {loop.get('career_consequence', '')}")
 
+    # Career cost
     career_cost = data.get("career_cost", "")
     if career_cost:
         lines.append("\nCAREER COST")
         lines.append(career_cost)
 
+    # Career progression risk
+    if data.get("career_progression_risk"):
+        lines.append(f"\nCAREER PROGRESSION RISK: {data.get('career_progression_risk', '').upper()}")
+
+    # Career moments
     career_moments = data.get("career_moments", [])
     if career_moments:
         lines.append("\nWHERE THIS SHOWS UP AT WORK")
         for moment in career_moments:
             lines.append(f"  - {moment}")
 
+    # Avoided outcome
     lines.append("\nWHAT THIS BEHAVIOUR IS DESIGNED TO AVOID")
-    lines.append(data.get("payoff", ""))
+    lines.append(data.get("avoided_outcome", ""))
 
+    # Prediction
+    if data.get("prediction"):
+        lines.append("\nPREDICTION")
+        lines.append(data.get("prediction", ""))
+
+    # Protocol
     protocol = data.get("protocol", {})
     lines.append("\nTHE PROTOCOL")
     if protocol.get("use_when"):
         lines.append(f"Use when: {protocol.get('use_when', '')}")
-    lines.append(f"Detection: {protocol.get('detection_trigger', '')}")
+    if protocol.get("interruption_check"):
+        lines.append(f"Interruption check: {protocol.get('interruption_check', '')}")
     for i, step in enumerate(protocol.get("steps", []), 1):
         lines.append(f"  {i}. {step}")
     lines.append(f"If you can't stop right now: {protocol.get('fallback_mid_activation', '')}")
@@ -269,6 +306,10 @@ def format_structured_output(data: dict) -> str:
         lines.append(f"If it doesn't land: {protocol.get('next_action', '')}")
     if protocol.get("when_it_works"):
         lines.append(f"When it works, watch for this: {protocol.get('when_it_works', '')}")
+
+    # Next experiment
+    if protocol.get("next_experiment"):
+        lines.append(f"\nNEXT EXPERIMENT\n{protocol.get('next_experiment', '')}")
 
     return "\n".join(lines)
 

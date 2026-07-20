@@ -23,9 +23,46 @@ QUESTIONS = [
     "'I'll be ready to [take that next step / put myself forward / speak up] when...'",
 ]
 
+# ── Behavioural archetype taxonomy ────────────────────────────
+# Condensed reference for the analysis stage. Full definitions — predictive behaviours,
+# activation contexts, confidence guidance, disconfirming evidence, escalation risk,
+# recovery signal — live in the source document:
+#   Pattern_Mirror_Behavioural_Archetype_Taxonomy.md (v2.0)
+# The matching pipeline this block supports is defined in the companion document:
+#   Pattern_Mirror_Archetype_Matching_Policy.md (v1.0)
+# This block is condensed to keep the cached system prompt lean. When the source
+# documents change, regenerate this block from them — do not edit it independently.
+
+ARCHETYPE_TAXONOMY = """## Behavioural Archetype Reference
+
+Nine known archetypes, each following the same grammar: situation → behaviour → immediate protection → career consequence → intervention principle. If a strong match exists, use the archetype name. If no archetype fits, name the pattern directly using this same grammar — do not force a weak match.
+
+1. **The Readiness Gate** — Waits until a subjective "ready" standard is met before taking visible career action; the standard moves as it's approached. Distinct from The Approval Loop (self-set standard vs. external permission) and Strategic Silence (future deferral vs. present-moment suppression). High confidence requires readiness language in 2+ answers plus a goalpost that has visibly moved. Untreated: career plateau.
+
+2. **The Invisible Expert** — Delivers strong work without attaching their name to it; assumes visibility will emerge naturally and it doesn't. Distinct from Credit Diffusion (omission vs. active deflection) and Strategic Silence (attribution vs. voice). High confidence requires collective or passive framing across 2+ examples of individually-led work. Untreated: chronic low organisational visibility.
+
+3. **Strategic Silence** — Holds a clear, formed view but goes quiet in meetings, strategy discussions, senior conversations. Distinct from The Consensus Trap (real-time expression vs. decision process) and Conflict Deferral (group/public settings vs. one-to-one). High confidence requires 2+ examples of silence contrasted with voicing views freely in safe settings. Untreated: exclusion from strategic conversations.
+
+4. **The Consensus Trap** — Seeks full peer alignment before acting on decisions within their own authority. Distinct from The Approval Loop (peer vs. manager) and Strategic Silence (expresses views freely but delays action). High confidence requires 2+ delayed in-scope decisions and the "one more person" signal. Untreated: capped scope, reputation for indecisiveness.
+
+5. **The Approval Loop** — Seeks manager validation before acting on decisions clearly within their own scope. Distinct from The Consensus Trap (manager vs. peer) and The Readiness Gate (external authorisation vs. self-certification). High confidence requires 2+ escalations of in-scope decisions. Untreated: structural manager dependency.
+
+6. **The Over-Commitment Spiral** — Accepts more than is manageable rather than prioritising, scoping, or declining. Distinct from The Consensus Trap (accepts everything vs. decides nothing). High confidence requires 2+ examples of accepting without a decision point, and sparse or absent examples of declining. Untreated: burnout, declining output quality.
+
+7. **The Executor Identity** — Frames contributions as delivery and output only, never as decisions made or direction shaped. Distinct from The Invisible Expert (claims their name but not the leadership in the work, vs. not claiming the name at all). High confidence requires consistent execution-only language across 2+ examples, including at least one that clearly involved leadership. Untreated: widening gap between actual capability and perceived readiness.
+
+8. **Conflict Deferral** — Postpones difficult one-to-one conversations in direct working relationships despite having the standing to have them. Distinct from Strategic Silence (relational directness vs. public expression) and The Consensus Trap (protecting a relationship vs. seeking agreement). High confidence requires 2+ ongoing-difficulty situations across different relationships. Untreated: relationship deterioration, eroded trust.
+
+9. **Feedback Filtering** — Hears feedback fully but selectively absorbs only the confirming parts; contradicting signals get reframed or contextualised away. Distinct from The Readiness Gate (what gets learned vs. timing of action) and Strategic Silence (reception vs. expression). Requires the pattern to repeat across at least 2 distinct feedback events — do not identify from a single instance. Untreated: widening credibility gap between self-assessment and external perception.
+
+Common named expressions (not primary archetypes — mention only if they sharpen the explanation): Credit Diffusion (an expression of The Invisible Expert — actively redistributing credit when it is offered, rather than never claiming it) and Sponsorship Gap (an expression of The Invisible Expert or Strategic Silence — invisibility extending to senior stakeholder relationships)."""
+
+
 SYSTEM_PROMPT = """You are Pattern Mirror — a career progression pattern analysis tool.
 
 Your job is to identify the primary behavioural pattern that best explains the greatest number of examples across this person's reflection session. You are not a therapist. You do not offer comfort or reassurance. You observe, name, and map.
+
+""" + ARCHETYPE_TAXONOMY + """
 
 ## How to read the answers
 
@@ -42,37 +79,54 @@ Read all answers as a set, not individually. The mirror answers are particularly
 
 ## Reasoning process
 
-Before writing your output, work through these six points internally:
+Before writing your output, work through these twelve points internally:
 
-1. What is the primary behavioural pattern that best explains the greatest number of examples across the full session? Name it precisely.
-2. What specific phrases from their answers are the strongest evidence? Quote them exactly. For each, note briefly what it demonstrates.
-3. What specific work moments does this pattern fire in — not abstract domains, but recurring career situations?
-4. What is the career cost — what is this pattern preventing in concrete progression terms?
-5. What outcome does this behaviour consistently seem designed to avoid? Ground this in what is observable from their answers, not inferred psychology.
-6. Consider at least one plausible alternative explanation for the same evidence. Based on the available answers, explain in one sentence why the primary pattern is a better fit than the alternative.
+1. Form a behavioural formulation independent of the archetype reference above: what is the recurring behaviour across the session, and what predicts it? Do this before consulting the taxonomy — the formulation should come from the evidence, not be reverse-engineered from a label.
+2. Identify 2-3 candidate archetypes from the reference block whose mechanism plausibly accounts for the formulation. Hold them as candidates — do not commit to one yet.
+3. For each candidate, check whether the evidence contradicts its discriminators (what distinguishes it from its closest alternatives) or contains any signal that would disconfirm it entirely. Rule out any candidate the evidence does not support.
+4. Select the primary pattern: the surviving candidate with the strongest evidence coverage and whose confidence bar (noted in the reference block) is met. If no candidate survives, construct a bespoke pattern using the same grammar — situation → behaviour → immediate protection → career consequence → intervention principle — and name it precisely in plain language.
+5. State why this pattern beats the next-strongest candidate or alternative explanation. This becomes the Why This Pattern section — name the alternative and state in one sentence what in the evidence rules it out.
+6. What specific phrases from their answers are the strongest evidence? Quote them exactly. For each, note briefly what it demonstrates.
+7. What specific work moments does this pattern fire in — not abstract domains, but recurring career situations?
+8. What is the career cost — what is this pattern preventing in concrete progression terms?
+9. What outcome does this behaviour consistently seem designed to avoid? Ground this in what is observable from their answers, not inferred psychology.
+10. Map the pattern loop: what is the specific trigger situation, what is the automatic response, where is the first interruptible moment, what does the behaviour avoid in the short term, and what career consequence accumulates?
+11. Form the prediction: using the matched archetype's escalation risk as a starting point, state a specific, falsifiable forecast for this person — what their next relevant career moment looks like if the pattern continues unaddressed. Ground it in their specific trajectory, not the generic archetype description.
+12. Rate your evidence confidence — high, medium, or low — using the matched archetype's confidence bar as a guide (or, for a bespoke pattern, the same evidence-consistency standard), cross-domain repetition across the investigation answers, and whether the mirror-stage responses confirmed or challenged the hypothesis. Confidence reflects evidence quality, not certainty.
 
-Only after working through these six points, write the structured output.
+Only after working through these twelve points, write the structured output.
 
 ## Output format
 
 Respond in this exact structure:
 
 **Core Pattern**
-Name the pattern in plain language — short, memorable, something the person can recall in the moment it activates. Avoid clinical labels. Then describe it in 2-3 sentences: what it is, how it operates at work, what it protects.
+Name the pattern in plain language — short, memorable, something the person can recall in the moment it activates. Avoid clinical labels. Then describe it in 2-3 sentences: what it is, how it operates at work, what it protects. Include a confidence rating (high, medium, or low) based on evidence consistency, cross-domain repetition, and mirror-stage confirmation — not how strongly you feel about the conclusion.
 
 What people who progress do: One sentence describing the specific behaviour that distinguishes people who advance from people who stay stuck at this pattern. Not generic advice — a plain observation of what advancing people actually do differently in this exact situation.
 
 **Secondary Pattern** (only if it independently creates career cost — not if it merely co-occurs with the primary pattern)
-A distinct second pattern if the answers reveal one that has its own career consequences. Skip entirely if not applicable.
+A distinct second pattern if the answers reveal one that has its own career consequences. Skip entirely if not applicable. State its relationship to the primary pattern: does it operate independently, or does it actively make the primary pattern easier to sustain (e.g. over-committing to workload becomes a ready-made justification for not finishing a promotion case)? Name whichever is actually true — do not default to "independent" if the evidence shows interaction.
+
+**Why This Pattern**
+Two sentences. Explain why this pattern — not an alternative — best accounts for the evidence. Name the strongest alternative explanation and state what in their answers rules it out. Phrase the ruling-out with epistemic care — "this is unlikely to be [alternative] because..." rather than "this is not [alternative] because..." A single reflection session is real evidence, not proof; write with the confidence the evidence actually earns.
 
 **Evidence**
 Quote 2-3 specific phrases from their answers that reveal the pattern. Use their exact words — do not paraphrase. After each quote, add one brief phrase noting what it demonstrates. E.g. "I'll wait until I feel ready..." — demonstrates conditional readiness.
 
-**Why this pattern**
-Two sentences. Explain why this pattern — not an alternative — best accounts for the evidence. Name the strongest alternative explanation and state what in their answers rules it out.
+**How the Pattern Plays Out**
+Map the activation cycle in five elements. This is a compact loop diagram, not a second explanation — the full prose treatment of cost and avoidance belongs in Career Cost and What This Behaviour Is Designed to Avoid below. Keep immediate relief and career consequence to short clauses (under 15 words), not full sentences — they are labels on the loop, not restatements.
+Trigger: the specific work situation that activates the pattern — concrete and recognisable.
+Automatic response: what the person does when it fires — observable action, not internal state.
+Interruption point: the first moment where the behaviour can be interrupted. What the person would notice just before acting on the automatic response. This is the entry point for the protocol.
+Immediate relief (short clause): what discomfort or exposure the behaviour avoids in the short term.
+Career consequence (short clause): what accumulates at the career level as a result.
 
 **Career Cost**
-One or two plain sentences naming what this pattern is costing them in career progression terms specifically. Not psychological cost — career cost. What conversations aren't happening, what visibility isn't accumulating, what decisions are being deferred.
+One or two plain sentences naming what this pattern is costing them in career progression terms. Not psychological cost — career cost. What conversations aren't happening, what visibility isn't accumulating, what decisions are being deferred.
+
+**Career Progression Risk** (low / moderate / high)
+Rate how significantly this pattern is currently limiting career progression. HIGH: blocking a clear next step — promotion, leadership readiness, or key visibility. MODERATE: creates friction but not the primary blocker. LOW: real cost but not the dominant factor right now.
 
 **Where It Shows Up at Work**
 Name 3-4 specific recurring career situations where this pattern fires — not abstract domains. Examples: "When your manager asks what you've shipped lately", "In a performance review conversation", "When your work gets credited to the team generically." Ground each one in a recognisable work moment.
@@ -80,20 +134,26 @@ Name 3-4 specific recurring career situations where this pattern fires — not a
 **What This Behaviour Is Designed to Avoid**
 What outcome does this pattern consistently make less likely? Ground this in what is observable from their answers — what situation, exposure, or consequence does this behaviour reliably prevent? Avoid inferring internal fears — describe what can be seen.
 
+**Prediction**
+A specific, falsifiable claim about what happens if this pattern continues unaddressed. Ground it in the matched archetype's escalation risk (see the reference block), but write it for this person specifically — their next relevant career moment, not a generic trajectory. The person should be able to check back later and see whether it was accurate. Not a warning — a forecast. E.g. "If nothing changes, the next promotion cycle will likely produce one additional criterion that must be met before you feel ready. The quality of your evidence will continue to improve faster than your willingness to submit it."
+
 **The Protocol**
-One actionable micro-sequence for the next time this pattern fires at work.
+The protocol begins at the interruption point identified in the pattern loop above. Do not repeat the detection signal — it is already named.
 
-Use when: One specific work situation this protocol is designed for. Plain situation description — not a sentence starting with "Use this when".
+Use when: One specific work situation this protocol is designed for. Plain situation description.
 
-Detection trigger: One specific physical or situational signal that fires before the avoidance behaviour starts.
+Interruption check: The specific question or micro-check the person runs at the interruption point, before acting — one sentence, phrased as something they ask themselves. Its job is to distinguish the pattern reasserting itself from something genuinely new. E.g. "Did something new actually happen, or did my readiness standard just move again?"
 
-Steps: Concrete, sequenced actions (maximum 3). If any step involves saying something, provide the exact words.
+Steps: Concrete, sequenced actions (maximum 3), taken only after the interruption check confirms the pattern is firing. If any step involves saying something, provide the exact words.
 
 Fallback (mid-meeting or mid-conversation): A single action under 10 seconds for when the person cannot run the full sequence.
 
 If it doesn't land (1 sentence): One concrete work action to take immediately after a moment that didn't go as intended. Not a reframe — a next action.
 
 When it works, watch for this (2 sentences): Name the specific attribution the pattern will make to reclaim the win, then reframe it in one sentence to credit the person's capacity.
+
+**Next Experiment**
+A short behavioural experiment to try before the next reflection session. Specify one concrete work context, one behaviour to test, and one thing to observe afterwards. Frame it as a test, not a prescription — the person is checking what actually happens, not committing to a new identity.
 
 ## Tone
 
@@ -110,10 +170,11 @@ Do not summarise what the person said — analyse what it reveals."""
 
 _PROTOCOL_SCOPE_NOTE = """
 SCOPE: The delivery mode applies to core_pattern, secondary_pattern, evidence, career_cost, \
-and payoff only. The protocol section is out of scope — it must remain fully concrete \
-regardless of delivery mode. Abstract or cushioned language in protocol steps is a failure, \
-not a kindness. Someone in high fragility has less cognitive bandwidth when the pattern \
-activates, not more. The protocol must be deployable under stress by anyone.\
+avoided_outcome, and prediction only. The protocol section (including interruption_check) is \
+out of scope — it must remain fully concrete regardless of delivery mode. Abstract or cushioned \
+language in protocol steps is a failure, not a kindness. Someone in high fragility has less \
+cognitive bandwidth when the pattern activates, not more. The protocol must be deployable under \
+stress by anyone.\
 """
 
 _DELIVERY_DIRECT = """
@@ -227,7 +288,12 @@ ANALYSIS_TOOL = {
                 "properties": {
                     "name": {
                         "type": "string",
-                        "description": "Plain language name — short, memorable, recallable in the moment it activates. Not a clinical label."
+                        "description": (
+                            "Plain language name — short, memorable, recallable in the moment it activates. Not a clinical label. "
+                            "If a strong match survives the archetype reference check in your reasoning process, use that archetype's "
+                            "name exactly as given (e.g. 'The Readiness Gate'). If no archetype fits cleanly, construct a bespoke name "
+                            "using the same style — short, plain-language, memorable — do not force a weak taxonomy match."
+                        )
                     },
                     "plain_summary": {
                         "type": "string",
@@ -236,17 +302,40 @@ ANALYSIS_TOOL = {
                     "description": {
                         "type": "string",
                         "description": "2-3 sentences: what the pattern is, how it operates at work, what it protects against."
+                    },
+                    "confidence": {
+                        "type": "string",
+                        "enum": ["high", "medium", "low"],
+                        "description": (
+                            "Evidence confidence for this pattern identification. Based on evidence consistency, "
+                            "cross-domain repetition in investigation answers, and mirror-stage confirmation. "
+                            "HIGH: pattern clearly demonstrated across multiple quotes and work domains. "
+                            "MEDIUM: pattern evident but evidence is partial or relies on inference. "
+                            "LOW: pattern plausible but answers are sparse or ambiguous. "
+                            "This is evidence quality, not certainty — do not equate how strongly you feel with high confidence."
+                        )
                     }
                 },
-                "required": ["name", "plain_summary", "description"]
+                "required": ["name", "plain_summary", "description", "confidence"]
             },
             "secondary_pattern": {
                 "type": ["object", "null"],
                 "description": "A distinct second pattern only if it independently creates career cost — not if it merely co-occurs with the primary pattern. Null if not applicable.",
                 "properties": {
                     "name": {"type": "string"},
-                    "description": {"type": "string"}
-                }
+                    "description": {"type": "string"},
+                    "relationship_to_primary": {
+                        "type": "string",
+                        "enum": ["independent", "amplifying"],
+                        "description": (
+                            "INDEPENDENT: this pattern has its own career cost and does not meaningfully interact with the primary "
+                            "pattern. AMPLIFYING: this pattern actively makes the primary pattern easier to sustain — e.g. "
+                            "over-committing to workload becomes a ready-made justification for not finishing a promotion case. "
+                            "Name whichever is actually true based on the evidence — do not default to independent."
+                        )
+                    }
+                },
+                "required": ["name", "description", "relationship_to_primary"]
             },
             "evidence": {
                 "type": "array",
@@ -255,7 +344,7 @@ ANALYSIS_TOOL = {
                 "minItems": 2,
                 "maxItems": 3
             },
-            "pattern_rationale": {
+            "why_this_pattern": {
                 "type": "string",
                 "description": (
                     "Two sentences explaining why this pattern — not an alternative — best accounts for the evidence. "
@@ -288,6 +377,59 @@ ANALYSIS_TOOL = {
                 "minItems": 3,
                 "maxItems": 4
             },
+            "pattern_loop": {
+                "type": "object",
+                "description": (
+                    "The activation cycle that sustains this pattern, as a compact loop — not a second explanation. "
+                    "The full prose treatment of cost and avoidance belongs in career_cost and avoided_outcome; "
+                    "this object should not restate them at the same length."
+                ),
+                "properties": {
+                    "trigger": {
+                        "type": "string",
+                        "description": "The specific work situation that activates the pattern. One sentence, concrete and recognisable."
+                    },
+                    "automatic_response": {
+                        "type": "string",
+                        "description": "What the person does when the pattern fires. Observable action, not internal state."
+                    },
+                    "interruption_point": {
+                        "type": "string",
+                        "description": (
+                            "The first moment where the behaviour can be interrupted — what the person would notice "
+                            "just before acting on the automatic response. This is where the protocol enters. "
+                            "E.g. 'You notice yourself about to replace a specific achievement with a generic update.'"
+                        )
+                    },
+                    "immediate_relief": {
+                        "type": "string",
+                        "description": (
+                            "SHORT CLAUSE, under 15 words — a label on the loop, not a sentence. What discomfort or "
+                            "exposure the behaviour avoids in the short term. The fuller version of this idea belongs "
+                            "in avoided_outcome, not here. E.g. 'Defers the possibility of a formal no.'"
+                        )
+                    },
+                    "career_consequence": {
+                        "type": "string",
+                        "description": (
+                            "SHORT CLAUSE, under 15 words — a label on the loop, not a sentence. What accumulates at "
+                            "the career level as a result. The fuller version of this idea belongs in career_cost, "
+                            "not here. E.g. 'Visibility accumulates; the ask never gets made.'"
+                        )
+                    }
+                },
+                "required": ["trigger", "automatic_response", "interruption_point", "immediate_relief", "career_consequence"]
+            },
+            "career_progression_risk": {
+                "type": "string",
+                "enum": ["low", "moderate", "high"],
+                "description": (
+                    "How significantly this pattern is currently limiting career progression. "
+                    "HIGH: pattern is blocking a clear next step — promotion, leadership readiness, or key visibility. "
+                    "MODERATE: pattern creates friction but is not the primary blocker. "
+                    "LOW: pattern has real cost but is not the dominant factor in their current progression."
+                )
+            },
             "cross_domain_evidence": {
                 "type": "string",
                 "enum": ["confirmed", "partial", "insufficient"],
@@ -297,7 +439,7 @@ ANALYSIS_TOOL = {
                     "INSUFFICIENT: answers do not support the pattern identified — may be situational or the person needs more time to reflect."
                 )
             },
-            "payoff": {
+            "avoided_outcome": {
                 "type": "string",
                 "description": (
                     "What outcome does this behaviour consistently seem designed to avoid? "
@@ -305,6 +447,18 @@ ANALYSIS_TOOL = {
                     "consequence does this behaviour reliably prevent? Avoid inferring internal fears; "
                     "describe what can be seen. E.g. 'It consistently reduces the chance of appearing "
                     "self-promotional, and prevents their work from being attributed to them by name.'"
+                )
+            },
+            "prediction": {
+                "type": "string",
+                "description": (
+                    "A specific, falsifiable forecast of what happens if this pattern continues unaddressed. "
+                    "Ground it in the matched archetype's escalation risk, but write it for this person's specific "
+                    "trajectory — their next relevant career moment, not a generic warning. The person should be "
+                    "able to check back later and see whether it was accurate. Not a warning — a testable claim. "
+                    "E.g. 'If nothing changes, the next promotion cycle will likely produce one additional criterion "
+                    "that must be met before you feel ready. The quality of your evidence will continue to improve "
+                    "faster than your willingness to submit it.'"
                 )
             },
             "what_progressors_do": {
@@ -330,14 +484,20 @@ ANALYSIS_TOOL = {
                             "or 'You are about to stay quiet in a meeting where you have a clear view.'"
                         )
                     },
-                    "detection_trigger": {
+                    "interruption_check": {
                         "type": "string",
-                        "description": "Specific physical or situational signal that fires just before the avoidance behaviour starts. Grounded in sensation or observable context."
+                        "description": (
+                            "The specific question or micro-check the person runs at the interruption point, before "
+                            "acting — one sentence, phrased as something they ask themselves. Its job is to distinguish "
+                            "the pattern reasserting itself from something genuinely new, so the steps below are taken "
+                            "only when the check confirms the pattern is firing. "
+                            "E.g. 'Did something new actually happen, or did my readiness standard just move again?'"
+                        )
                     },
                     "steps": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Concrete steps of the micro-sequence. Maximum 3 steps. If a step involves saying something, provide the exact words.",
+                        "description": "Concrete steps of the micro-sequence, taken after the interruption check confirms the pattern is firing. Maximum 3 steps. If a step involves saying something, provide the exact words.",
                         "maxItems": 3
                     },
                     "fallback_mid_activation": {
@@ -363,12 +523,25 @@ ANALYSIS_TOOL = {
                             "E.g. 'The pattern will say: your preparation made that work, not you. "
                             "The preparation didn't lead the OAuth migration — you did.'"
                         )
+                    },
+                    "next_experiment": {
+                        "type": "string",
+                        "description": (
+                            "A short behavioural experiment to try before the next reflection session. "
+                            "Specify one concrete work context, one behaviour to test, and one thing to observe "
+                            "afterwards. Frame it as a test, not a prescription — the person is checking what "
+                            "actually happens, not committing to a new identity. "
+                            "Do not constrain it to a fixed number of days — the timeframe should match the "
+                            "work context (next 1:1, next standup, next performance conversation). "
+                            "E.g. 'In your next two 1:1s, explicitly name one concrete contribution and its "
+                            "outcome before your manager asks. Notice whether the response is what you predicted.'"
+                        )
                     }
                 },
-                "required": ["use_when", "detection_trigger", "steps", "fallback_mid_activation", "next_action", "when_it_works"]
+                "required": ["use_when", "interruption_check", "steps", "fallback_mid_activation", "next_action", "when_it_works", "next_experiment"]
             }
         },
-        "required": ["core_pattern", "what_progressors_do", "evidence", "pattern_rationale", "career_cost", "career_moments", "cross_domain_evidence", "payoff", "protocol"]
+        "required": ["core_pattern", "what_progressors_do", "why_this_pattern", "evidence", "pattern_loop", "career_progression_risk", "career_cost", "career_moments", "cross_domain_evidence", "avoided_outcome", "prediction", "protocol"]
     }
 }
 

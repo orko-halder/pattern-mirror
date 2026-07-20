@@ -1,0 +1,222 @@
+# Pattern Mirror — Codex Reference
+
+## What This Project Is
+
+A career progression pattern analysis tool. Users answer 5 structured questions about how they operate at work, then move through a three-stage pipeline: AI-driven investigation (3-7 work-domain follow-up questions), a confidence check (Sonnet forms an internal hypothesis and generates 1-2 soft confirmation questions), and a final analysis that returns a named pattern with a deployable protocol.
+
+The tool is designed for the Cognizant Bluebolt initiative — helping employees understand what's holding them back from career progression (visibility avoidance, imposter syndrome, readiness deferral, over-commitment, silence at key moments) and what to do about it.
+
+This is also a learning project for the Codex Certified Architect exam. Every module demonstrates a specific Codex API concept.
+
+---
+
+## Architecture
+
+```
+app.py                Streamlit UI — 4-stage flow (initial → followup → confidence → results)
+middleware.py         Pre/post processing — token estimate, crisis check, PII, cost log, safety filter
+file_context.py       Files API — upload/delete context documents, build document blocks
+validator.py          Input quality check (Haiku) — runs before analysis; format_answers()
+followup.py           Follow-up question generator (Sonnet) — stage 1 of three-stage pipeline
+confidence.py         Confidence check generator (Sonnet) — forms hypothesis + 1-2 confirmation questions
+classifier.py         Readiness classifier (Haiku) — shapes delivery mode
+analyser.py           Main pipeline (Sonnet) — tool use loop, returns AnalysisResult
+prompts.py            All prompts, tool schemas, delivery variants — no logic here
+tools.py              Tool handlers + schemas — framework search, web search
+rag.py                RAG pipeline — ChromaDB + sentence-transformers, semantic framework search
+evaluator.py          Output quality scorer (Haiku) — runs after analysis
+frameworks.json       Local knowledge base of psychological frameworks
+chroma_db/            ChromaDB persistent index — gitignored, rebuilt automatically on first run
+
+mcp_server.py         MCP server — exposes analyse_reflection as a tool over stdio transport
+practice_mcp_server.py  Practice MCP server — word_count + reading_time tools (learning exercise)
+test_mcp_server.py    Test client for Pattern Mirror MCP server
+test_mcp_client.py    Test client for practice MCP server
+```
+
+**Flow (stage 1 — initial answers):**
+`app.py` → `pre_process()` → `upload_context_file()` (optional) → `validate_answers()` → `generate_followups()` → advance to stage 2
+
+**Flow (stage 2 — follow-up answers):**
+`app.py` → user answers 3-7 work-domain follow-up questions → `generate_confidence_questions()` → advance to stage 3
+
+**Flow (stage 3 — confidence check):**
+`app.py` → user answers 1-2 confirmation questions → `analyse_structured(followup_answers=..., confidence_answers=...)` → `post_process()` → render results
+
+---
+
+## Module Responsibilities
+
+**`file_context.py`** — Files API wrapper. No Codex inference calls.
+- `upload_context_file(client, file_bytes, filename) → UploadedFile` — validates type/size, uploads, returns `file_id`.
+- `delete_file(client, file_id)` — swallows errors so pipeline cleanup is never interrupted.
+- `build_document_block(file_id) → dict` — returns the document content block for use in `messages`.
+- Supported types: `.txt`, `.md`, `.pdf`. Max size: 5 MB.
+- Files are ephemeral — always call `delete_file()` after use (app.py does this in a `finally` block).
+
+**`middleware.py`** — no Codex calls. All checks are deterministic (regex, arithmetic).
+- Pre-processing: `pre_process(answers) → PreCheckResult`. Runs before `validate_answers()`. `blocked=True` stops the pipeline; `warnings` are shown but don't block.
+- Post-processing: `post_process(result_data, usage, model) → PostCheckResult`. Runs after `analyse_structured()`. Logs cost to console and returns it in `cost_summary`.
+- Crisis check is a hard block. PII detection is warn-only — users may mention contact details in context.
+- `AnalysisResult.usage` accumulates `input_tokens` + `output_tokens` across all API calls in the tool use loop.
+
+**`prompts.py`** — single source of truth for all prompt text and tool schemas. Change prompts here, not in the pipeline. `build_system_prompt(delivery_mode)` appends delivery instructions to the base system prompt.
+
+**`tools.py`** — every tool handler returns a standard envelope: `{"status": "success"|"error", "content": str, "metadata": dict}`. Codex never sees `metadata` — only `content`. Add new tools here: write a handler, add a schema constant, register in `handle_tool_call()`.
+
+**`classifier.py`** — Codex classifies `self_awareness` and `fragility_risk`. Python derives `delivery_mode` deterministically in `derive_delivery_mode()`. Do not ask Codex to derive the delivery mode — it's inconsistent at boundaries.
+
+**`followup.py`** — Sonnet follow-up generator. `generate_followups(client, initial_answers) → list[str]`. Uses forced tool_choice (`generate_followup_questions`). Returns 3-7 work-domain questions; Codex's internal pattern hypothesis is never surfaced to the user. Falls back to 4 hardcoded work-specific questions on any API failure — pipeline must not block on follow-up generation failure. Sonnet used here (not Haiku) because hypothesis quality directly affects confidence check and analysis accuracy.
+
+**`confidence.py`** — Sonnet confidence check generator. `generate_confidence_questions(client, initial_answers, followup_answers) → ConfidenceResult`. Reads all collected answers, forms a precise internal hypothesis about the career-limiting pattern, and generates 1-2 soft confirmation questions phrased as observations (never as yes/no, never revealing the pattern label). Falls back to a single broad open question on any API failure — pipeline must not block.
+- `ConfidenceResult.hypothesis` — internal string passed to `analyse_structured()` as primed context. Never shown to the user.
+- `ConfidenceResult.questions` — 1-2 strings shown to the user in Stage 3.
+
+**`analyser.py`** — the tool use loop. `force_final=True` after the first tool call forces `pattern_analysis`. Extended thinking is enabled on the first call only, disabled when `force_final=True`. Truncation is handled via retry — messages are never modified, only `max_tokens` changes. Prompt caching is always active — system prompt and tools are marked with `cache_control: ephemeral` so calls 2 and 3 in the loop read from cache at 0.10× cost. Accepts optional `followup_answers` and `confidence_answers` — when provided, `format_answers()` splits the XML into `<initial_answers>`, `<validation_answers>`, and `<confirmation_answers>` blocks. The `<confirmation_answers>` block includes a `hypothesis` attribute on each answer so Sonnet starts the analysis with the primed hypothesis context.
+
+---
+
+## MCP Interface
+
+**`mcp_server.py`** — Pattern Mirror MCP server. Exposes the full analysis pipeline as a single MCP tool over stdio transport. Spawned as a subprocess by any MCP-compatible client (Codex, Codex Desktop, custom apps).
+
+- Tool exposed: `analyse_reflection(answers: list[str], extended_thinking: bool = false)`
+- Requires exactly 5 answers. Returns plain-text analysis formatted for terminal rendering.
+- Creates `_client = Anthropic(...)` once at module startup — not per-request.
+- Runs the same pipeline as `app.py`: `pre_process → validate_answers → generate_followups → analyse_structured → post_process → _format_result`.
+- **Single-shot design**: follow-up questions are generated internally but answers are not collected. Analysis runs on the initial 5 answers only. Interactive follow-up is a v2 feature — the round-trip doesn't map cleanly to a single tool call.
+- `_format_result()` renders the result as clean plain text (ASCII separators, no markdown symbols) — suitable for terminal display.
+
+**`practice_mcp_server.py`** — Standalone learning exercise. Two tools: `word_count` and `reading_time`. No Codex calls, no pipeline imports. Demonstrates the core MCP server pattern (`Server` → `@list_tools()` → `@call_tool()` → `stdio_server`) before connecting to a real pipeline.
+
+**`test_mcp_server.py`** — Integration test for Pattern Mirror MCP. Spawns `mcp_server.py` as a subprocess, performs the MCP handshake, calls `analyse_reflection` with 5 sample answers keyed to the actual QUESTIONS from `prompts.py`, prints the full result. Run with `python test_mcp_server.py`.
+
+**`test_mcp_client.py`** — Integration test for the practice server. Spawns `practice_mcp_server.py`, calls `word_count` and `reading_time`. Run with `python test_mcp_client.py`.
+
+**MCP transport pattern:**
+```
+MCP client (test script / Codex / Codex Desktop)
+  └─ StdioServerParameters(command="python", args=["mcp_server.py"])
+       └─ stdio_client → ClientSession → session.initialize()  ← JSON-RPC handshake
+            └─ session.call_tool("analyse_reflection", {...})
+                 └─ mcp_server.py receives request → runs pipeline → returns TextContent
+```
+
+---
+
+## Model Usage
+
+| Component | Model | Why |
+|---|---|---|
+| `validate_answers` | `Codex-haiku-4-5-20251001` | Binary check — fast, cheap |
+| `generate_followups` | `Codex-sonnet-4-6` | Hypothesis quality matters — weak hypothesis = weak confidence check and weak analysis |
+| `generate_confidence_questions` | `Codex-sonnet-4-6` | Precision hypothesis + soft question framing — quality-sensitive |
+| `classify_readiness` | `Codex-haiku-4-5-20251001` | Pattern matching — upgrade to Sonnet when ready |
+| `analyse_structured` | `Codex-sonnet-4-6` | Core product — quality matters |
+| `evaluate_output` | `Codex-haiku-4-5-20251001` | Rubric scoring — mechanical task |
+
+---
+
+## Key Constraints
+
+- **`prompts.py` is logic-free.** No imports, no conditionals. Strings and dicts only.
+- **`validator.py` returns `list[str]`** — empty = valid. Never `bool`.
+- **`classifier.py` never blocks the pipeline.** On any failure it returns a safe default (`medium/medium/paced`).
+- **Tool handlers always return the envelope shape.** Never return raw strings from a tool handler.
+- **Delivery mode only affects framing sections** (core_pattern, secondary_pattern, evidence, payoff). The protocol must be concrete regardless of delivery mode — see `_PROTOCOL_SCOPE_NOTE` in `prompts.py`.
+- **Extended thinking on `Codex-sonnet-4-6` uses `thinking.type: "adaptive"` + `effort="low|medium|high"`.** On 4.6+, `max_tokens` is output-only — thinking tokens are separate. Pass `effort` only when thinking is enabled; omit it on the `force_final` call. Older models (4.5 and below) used `thinking.type: "enabled"` + `budget_tokens` where `max_tokens` had to exceed `budget_tokens`.
+- **Files API requires `client.beta.messages.create` with `betas=["files-api-2025-04-14"]`.** When `context_file_id` is set, `analyser.py` uses this for all calls in the loop — the document block lives in the first user message which is replayed every turn.
+- **Context files must be deleted after use.** `app.py` wraps the full pipeline in `try/finally` to ensure `delete_file()` is always called, even when `st.stop()` is raised mid-pipeline.
+- **Prompt caching requires `betas=["prompt-caching-2024-07-31"]`.** Both paths in `analyser.py` (with and without Files API) use `client.beta.messages.create`. When Files API is also active, both betas are passed: `[PROMPT_CACHING_BETA, "files-api-2025-04-14"]`. The system prompt is passed as a list (not a string) with `cache_control: ephemeral` on the text block. Tool schemas are cached by marking the last tool in the list — never mutate the original constants, build a new list.
+- **Minimum cacheable block is 1024 tokens.** The system prompt + tools in Pattern Mirror comfortably exceed this. Don't add `cache_control` to short prompts — it has no effect and adds noise.
+- **`generate_followups()` never blocks the pipeline.** Any exception falls back to 4 hardcoded work-specific questions. The stage always advances.
+- **`generate_confidence_questions()` never blocks the pipeline.** Any exception falls back to a single broad open question. `ConfidenceResult.hypothesis` is set to `"pattern unclear — proceeding without primed hypothesis"` so `analyse_structured()` still receives a value but understands there is no primed context.
+- **`cross_domain_evidence` drives the results decision in app.py.** `"confirmed"` → show analysis; `"partial"` → show analysis with a caveat warning; `"insufficient"` → honest message + reset, no analysis shown. Never silently degrade.
+- **Follow-up questions must not reveal the hypothesis.** They probe work domains (manager relationship, peer dynamics, high-stakes moments, visibility, workload, decisions) without naming the pattern. This is enforced in `FOLLOWUP_SYSTEM_PROMPT`.
+- **Confidence questions must not name the pattern label.** They are phrased as soft observations ("It sounds like...", "Does it feel like...") and give the employee room to confirm, refine, or push back. Enforced in `CONFIDENCE_SYSTEM_PROMPT`.
+- **Confidence answers are always passed to `analyse_structured()`, even if the employee denies the hypothesis.** Denial is data — it either refines the analysis or triggers `cross_domain_evidence: insufficient`. Never discard the confidence stage answers.
+- **MCP server uses single-shot analysis.** `mcp_server.py` calls `analyse_structured()` without `followup_answers` — the interactive two-round flow doesn't map to a single tool call. Do not add `st.session_state` or multi-turn logic to the MCP server.
+- **MCP requires Python ≥ 3.10.** The project venv must be built with Python 3.11+ (Homebrew: `/opt/homebrew/bin/python3.11`). The system Python on macOS is 3.9 and cannot install `mcp`.
+- **MCP stdio transport means no print() in server code.** `mcp_server.py` and `practice_mcp_server.py` must not print to stdout — stdout is the JSON-RPC channel. Debug output goes to stderr or a log file.
+
+---
+
+## Adding a New Framework
+
+1. Add an entry to `frameworks.json`
+2. Delete `chroma_db/` so the index rebuilds on next run — or call `rag.build_index()` directly
+3. No other changes needed — semantic search picks up new entries automatically
+
+## Adding a New Tool
+
+1. Write a handler in `tools.py` that returns `_ok(content, **metadata)` or `_err(content)`
+2. Add a tool schema constant
+3. Register in `handle_tool_call()`
+4. Add to the `tools` list in `analyser.py`
+
+## Adding a New Delivery Mode Parameter
+
+See the checklist in `classifier.py` module docstring. Future parameters (`psychological_vocabulary`, `resistance`) are tracked in the project backlog.
+
+---
+
+## Running Locally
+
+**Streamlit UI (browser):**
+```bash
+cd pattern-mirror
+source .venv/bin/activate
+streamlit run app.py
+```
+
+**MCP server (terminal / Codex integration):**
+```bash
+# Test the practice server (no API key needed)
+python test_mcp_client.py
+
+# Test the Pattern Mirror MCP server (runs full pipeline, costs tokens)
+python test_mcp_server.py
+```
+
+Requires `.env` with:
+```
+ANTHROPIC_API_KEY=...
+TAVILY_API_KEY=...   # optional — web search disabled if missing
+```
+
+**Note:** The Streamlit UI and MCP server are two independent interfaces to the same pipeline. Running `mcp_server.py` does not replace or affect `app.py`.
+
+## Skills
+
+Project-specific skills live in `skills/`. Install them by double-clicking the `.skill` files in the Antarjyoti folder — they install globally in Codex, not per-project.
+
+| Skill | Trigger | What it does |
+|---|---|---|
+| `pm-code-review` | "review the code", "any concerns" | Checks files against AGENTS.md constraints |
+| `cca-sprint-debrief` | "debrief the sprint", "update exam doc" | Extracts Codex API concepts → CCA_Exam_Reference.md |
+| `pm-commit` | "ready to commit", "commit message" | Lints staged files, generates commit message |
+
+When AGENTS.md rules change, update the corresponding skill source in `skills/` and repackage.
+
+---
+
+## First-Time Setup (after cloning)
+
+```bash
+source .venv/bin/activate
+pip install ruff
+sh scripts/install-hooks.sh   # installs git pre-commit hook
+```
+
+The pre-commit hook runs `ruff check` on staged `.py` files and blocks commits on lint failures. Run `.venv/bin/ruff check --fix <file>` to auto-fix where possible.
+
+---
+
+## What Not To Do
+
+- Do not add prompt text directly in `analyser.py` or `app.py` — it goes in `prompts.py`
+- Do not change `delivery_mode` derivation logic in the classifier tool schema — it belongs in `derive_delivery_mode()` in Python
+- Do not modify `messages[]` on a truncation retry — the retry works precisely because messages are unchanged
+- Do not show `ThinkingBlock` content to the user — it is Codex's internal monologue
+- Do not raise exceptions from tool handlers — return `_err(content)` instead
+- Do not degrade silently — if a pipeline step fails or is skipped, surface it to the user rather than producing a lower-quality result without them knowing

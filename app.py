@@ -346,20 +346,32 @@ elif st.session_state.stage == "mirror":
 
         # Core pattern
         core = result.data.get("core_pattern", {})
+        confidence = core.get("confidence", "")
+        confidence_label = {"high": "🟢 High confidence", "medium": "🟡 Medium confidence", "low": "🔴 Low confidence"}.get(confidence, "")
         st.markdown(f"### {core.get('name', '')}")
+        if confidence_label:
+            st.caption(confidence_label)
         st.caption(core.get("plain_summary", ""))
         st.markdown(core.get("description", ""))
 
-        # What progressors do — rendered immediately after core pattern
+        # What progressors do
         if result.data.get("what_progressors_do"):
             st.markdown(f"*{result.data.get('what_progressors_do', '')}*")
 
         # Secondary pattern
         secondary = result.data.get("secondary_pattern")
         if secondary:
+            relationship = secondary.get("relationship_to_primary", "")
+            relationship_label = " (amplifies the primary pattern)" if relationship == "amplifying" else " (independent)" if relationship else ""
             st.markdown("---")
-            st.markdown(f"**Secondary Pattern — {secondary.get('name', '')}**")
+            st.markdown(f"**Secondary Pattern — {secondary.get('name', '')}{relationship_label}**")
             st.markdown(secondary.get("description", ""))
+
+        # Why this pattern
+        if result.data.get("why_this_pattern"):
+            st.markdown("---")
+            st.markdown("**Why This Pattern**")
+            st.markdown(result.data.get("why_this_pattern", ""))
 
         # Evidence
         st.markdown("---")
@@ -367,17 +379,33 @@ elif st.session_state.stage == "mirror":
         for quote in result.data.get("evidence", []):
             st.markdown(f"> {quote}")
 
-        # Why this pattern
-        if result.data.get("pattern_rationale"):
+        # Pattern loop
+        loop = result.data.get("pattern_loop", {})
+        if loop:
             st.markdown("---")
-            st.markdown("**Why this pattern**")
-            st.markdown(result.data.get("pattern_rationale", ""))
+            st.markdown("**How the Pattern Plays Out**")
+            if loop.get("trigger"):
+                st.markdown(f"**Trigger** — {loop.get('trigger', '')}")
+            if loop.get("automatic_response"):
+                st.markdown(f"**Automatic response** — {loop.get('automatic_response', '')}")
+            if loop.get("interruption_point"):
+                st.info(f"**Interruption point** — {loop.get('interruption_point', '')}")
+            if loop.get("immediate_relief"):
+                st.markdown(f"**Immediate relief** — {loop.get('immediate_relief', '')}")
+            if loop.get("career_consequence"):
+                st.markdown(f"**Career consequence** — {loop.get('career_consequence', '')}")
 
         # Career cost
         career_cost = result.data.get("career_cost", "")
         if career_cost:
             st.markdown("---")
             st.error(f"**Career Cost** — {career_cost}")
+
+        # Career progression risk
+        risk = result.data.get("career_progression_risk", "")
+        if risk:
+            risk_label = {"high": "🔴 High", "moderate": "🟡 Moderate", "low": "🟢 Low"}.get(risk, risk.capitalize())
+            st.caption(f"Career Progression Risk: {risk_label}")
 
         # Career moments
         career_moments = result.data.get("career_moments", [])
@@ -387,10 +415,16 @@ elif st.session_state.stage == "mirror":
             for moment in career_moments:
                 st.markdown(f"- {moment}")
 
-        # Payoff
+        # Avoided outcome
         st.markdown("---")
         st.markdown("**What This Behaviour Is Designed to Avoid**")
-        st.info(result.data.get("payoff", ""))
+        st.info(result.data.get("avoided_outcome", ""))
+
+        # Prediction
+        if result.data.get("prediction"):
+            st.markdown("---")
+            st.markdown("**Prediction**")
+            st.warning(result.data.get("prediction", ""))
 
         # Protocol
         protocol = result.data.get("protocol", {})
@@ -398,7 +432,8 @@ elif st.session_state.stage == "mirror":
         st.markdown("**The Protocol**")
         if protocol.get("use_when"):
             st.caption(protocol.get("use_when", ""))
-        st.markdown(f"🔍 **Detection:** {protocol.get('detection_trigger', '')}")
+        if protocol.get("interruption_check"):
+            st.markdown(f"🛑 **Interruption check:** {protocol.get('interruption_check', '')}")
         steps = protocol.get("steps", [])
         if steps:
             st.markdown("**Steps:**")
@@ -410,6 +445,12 @@ elif st.session_state.stage == "mirror":
         if protocol.get("when_it_works"):
             st.success(f"**When it works, watch for this:** {protocol.get('when_it_works', '')}")
 
+        # Next experiment
+        if protocol.get("next_experiment"):
+            st.markdown("---")
+            st.markdown("**Next Experiment**")
+            st.markdown(protocol.get("next_experiment", ""))
+
         # Citations — only shown when web search was used
         if result.citations:
             st.markdown("---")
@@ -420,7 +461,7 @@ elif st.session_state.stage == "mirror":
         # Reset
         st.markdown("---")
         if st.button("Start a new reflection", use_container_width=True):
-            for key in ["stage", "initial_answers", "followup_questions", "followup_answers",
-                        "confidence_questions", "hypothesis", "extended_thinking", "context_file_id"]:
+            for key in ["stage", "reflection_answers", "investigation_questions", "investigation_answers",
+                        "mirror_questions", "hypothesis", "extended_thinking", "context_file_id"]:
                 st.session_state.pop(key, None)
             st.rerun()

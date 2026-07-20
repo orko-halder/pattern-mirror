@@ -17,8 +17,15 @@ SONNET_MODEL = "claude-sonnet-4-6"
 # On 4.6+, max_tokens is output-only — thinking tokens are separate and not counted here.
 THINKING_EFFORT = "high"
 
-MAX_TOKENS_ANALYSE = 4000       # output tokens — used for both thinking and non-thinking calls
-MAX_TOKENS_ANALYSE_SHORT = 2048  # used when extended_thinking=False or on truncation retry
+MAX_TOKENS_ANALYSE = 6500       # output tokens — used for both thinking and non-thinking calls
+MAX_TOKENS_ANALYSE_SHORT = 4000  # used when extended_thinking=False or on truncation retry
+# Raised from 4000/2048 (v2.0 taxonomy integration) — the analysis schema grew: pattern_loop
+# (5 new fields), next_experiment, confidence, career_progression_risk, why_this_pattern. The
+# old ceiling was truncating on the first call, before the forced-call retry logic could run.
+# Raised again from 6000/3500 (prediction, interruption_check, relationship_to_primary added) —
+# pattern_loop's immediate_relief/career_consequence were also shortened to short clauses in the
+# same change, which offsets some of this, but bumping proactively rather than waiting for a
+# repeat truncation report.
 MAX_TOKENS_VALIDATE = 300
 MAX_TOKENS_CLASSIFY = 512
 MAX_TOKENS_CONFIDENCE = 800     # Sonnet hypothesis formation + 1-2 confirmation questions
